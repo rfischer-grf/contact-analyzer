@@ -111,6 +111,26 @@ class EvenementAudit(Base):
     payload: Mapped[dict | None] = mapped_column(_Json, nullable=True)
 
 
+class Correction(Base):
+    """Correction humaine d'un champ extrait — alimente le gold set (spec §2.4, #37).
+
+    Au gate HITL, le relecteur corrige les champs sous le seuil de confiance. Chaque
+    correction (ancienne → nouvelle valeur) est consignée par tenant : elle constitue
+    la vérité terrain (gold set) qui sert à mesurer/améliorer la qualité d'extraction.
+    """
+
+    __tablename__ = "correction"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    contrat_id: Mapped[str] = mapped_column(String(64), index=True)
+    champ: Mapped[str] = mapped_column(String(128))
+    ancienne_valeur: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nouvelle_valeur: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acteur: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    horodatage: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class SerieIndice(Base):
     __tablename__ = "serie_indice"
     __table_args__ = (UniqueConstraint("indice", "periode", name="uq_serie_indice_indice_periode"),)
@@ -120,3 +140,21 @@ class SerieIndice(Base):
     periode: Mapped[str] = mapped_column(String(7))  # 'YYYY-MM'
     valeur: Mapped[float] = mapped_column(Numeric(12, 4))
     source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class FeedToken(Base):
+    """Capability bearer du feed ICS (spec §2.6).
+
+    Pas de RLS : la résolution se fait par `token_hash` (le secret EST l'auth) ;
+    le `tenant` porté par la ligne borne ensuite la lecture des contrats.
+    On ne stocke que le hash SHA256 du token, jamais le token en clair.
+    """
+
+    __tablename__ = "feed_token"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    sujet: Mapped[str] = mapped_column(String(255))  # utilisateur Keycloak
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    revoque: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

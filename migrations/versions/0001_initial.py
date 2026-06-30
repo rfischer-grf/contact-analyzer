@@ -24,7 +24,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 # Tables porteuses de données tenant → soumises à la RLS.
-RLS_TABLES = ("document", "contrat", "evenement_audit")
+RLS_TABLES = ("document", "contrat", "evenement_audit", "correction")
 
 
 def upgrade() -> None:

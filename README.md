@@ -44,7 +44,9 @@ src/contract_intelligence/
   config.py                   # settings (pydantic-settings, préfixe CI_)
   domain/                     # modèles §3 (Champ/Provenance + entités) + état effectif (fold)
   db/                         # ORM (document/contrat/audit/séries), session tenant, committer()
-  api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/…
+  indexation/                 # moteur de révision tarifaire (P1=P0×S1/S0), collecteurs, projection
+  alerting/                   # job quotidien (date limite de dénonciation), feed ICS, capability token
+  api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/ics/…
   worker/                     # saga Temporal : états, workflows, activities
 migrations/                   # Alembic : schéma initial + RLS multi-tenant + audit append-only
 infra/                        # docker-compose (infra + app), Keycloak (realm), Garage (config + provisioning), .env
