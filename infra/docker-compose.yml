@@ -2,8 +2,8 @@
 # Garde-fous (§7) : Garage (jamais MinIO), Weaviate (jamais pgvector), Mailpit en dev,
 # pas de Redis sans besoin concret.
 #
-# Démarrage (depuis la racine) : `make up` — infra + migrate + API + worker + provisioning
-# Garage. Infra seule : `make up-infra` (les services applicatifs sont sous le profil `app`).
+# Démarrage (depuis la racine) : `make up` — infra + migrate + API + worker + frontend +
+# provisioning Garage. Infra seule : `make up-infra` (services applicatifs sous profil `app`).
 
 name: clm
 
@@ -199,6 +199,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # SPA React/Vite. Les VITE_* sont consommées DANS LE NAVIGATEUR → URLs publiées
+  # sur l'hôte (localhost), jamais des noms de services compose. Source montée pour
+  # le HMR ; node_modules isolé dans un volume (sinon le bind écraserait l'install).
+  frontend:
+    image: node:20-bookworm-slim
+    profiles: ["app"]
+    working_dir: /app
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8080}
+      VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-clm}
+      VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-clm-spa}
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   pg_data:
   garage_meta:
@@ -206,3 +226,4 @@ volumes:
   temporal_data:
   weaviate_data:
   mailpit_data:
+  frontend_node_modules:

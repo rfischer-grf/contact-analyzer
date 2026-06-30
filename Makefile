@@ -14,7 +14,7 @@ COMPOSE_APP  := $(COMPOSE) --profile app
 
 .DEFAULT_GOAL := help
 .PHONY: help env up up-infra build down down-v restart ps logs logs-all \
-        migrate provision-garage health shell-api shell-db psql lint test clean urls
+        migrate provision-garage health shell-api shell-front shell-db psql lint test clean urls
 
 help: ## Affiche cette aide
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -24,7 +24,7 @@ env: $(ENV_FILE) ## Crée infra/.env depuis le modèle s'il manque
 $(ENV_FILE):
 	@cp infra/.env.example $(ENV_FILE) && echo "→ $(ENV_FILE) créé depuis .env.example"
 
-up: env ## Lance TOUTE la stack (infra + migrations + API + worker) puis provisionne Garage
+up: env ## Lance TOUTE la stack (infra + migrations + API + worker + frontend) puis provisionne Garage
 	$(COMPOSE_APP) up -d --build
 	@$(MAKE) --no-print-directory provision-garage || \
 		echo "⚠  Provisioning Garage à finaliser (cf. README #4)."
@@ -42,14 +42,14 @@ down: ## Arrête la stack (conserve les volumes/données)
 down-v: ## Arrête la stack ET supprime les volumes (RAZ des données)
 	$(COMPOSE_APP) down -v
 
-restart: ## Redémarre API + worker (après changement de deps/config)
-	$(COMPOSE_APP) up -d --build api worker
+restart: ## Redémarre API + worker + frontend (après changement de deps/config)
+	$(COMPOSE_APP) up -d --build api worker frontend
 
 ps: ## État des services
 	$(COMPOSE_APP) ps
 
-logs: ## Suit les logs de l'API et du worker
-	$(COMPOSE_APP) logs -f api worker
+logs: ## Suit les logs de l'API, du worker et du frontend
+	$(COMPOSE_APP) logs -f api worker frontend
 
 logs-all: ## Suit les logs de tous les services
 	$(COMPOSE_APP) logs -f
@@ -66,6 +66,9 @@ health: ## Vérifie l'API (GET /health)
 shell-api: ## Ouvre un shell dans le conteneur API
 	$(COMPOSE_APP) exec api bash
 
+shell-front: ## Ouvre un shell dans le conteneur frontend
+	$(COMPOSE_APP) exec frontend sh
+
 shell-db: psql ## Alias de psql
 psql: ## Ouvre psql sur la base clm
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-clm} -d $${POSTGRES_DB:-clm}
@@ -81,6 +84,7 @@ clean: down-v ## Arrêt + suppression des volumes (alias de down-v)
 urls: ## Rappelle les URLs des services de dev
 	@echo ""
 	@echo "Stack prête :"
+	@echo "  Frontend   http://localhost:5173           (SPA React/Vite)"
 	@echo "  API        http://localhost:8000/health   (docs: /docs)"
 	@echo "  Keycloak   http://localhost:8080           (admin/admin ; alice/alice, bob/bob)"
 	@echo "  Temporal   http://localhost:8233"
