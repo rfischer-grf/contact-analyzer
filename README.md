@@ -45,7 +45,8 @@ src/contract_intelligence/
   domain/                     # modèles §3 (Champ/Provenance + entités) + état effectif (fold)
   db/                         # ORM (document/contrat/audit/séries), session tenant, committer()
   indexation/                 # moteur de révision tarifaire (P1=P0×S1/S0), collecteurs, projection
-  api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/…
+  alerting/                   # job quotidien (date limite de dénonciation), feed ICS, capability token
+  api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/ics/…
   worker/                     # saga Temporal : états, workflows, activities
 migrations/                   # Alembic : schéma initial + RLS multi-tenant + audit append-only
 infra/                        # docker-compose, Keycloak (realm), Garage (config), .env

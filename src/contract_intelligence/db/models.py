@@ -120,3 +120,21 @@ class SerieIndice(Base):
     periode: Mapped[str] = mapped_column(String(7))  # 'YYYY-MM'
     valeur: Mapped[float] = mapped_column(Numeric(12, 4))
     source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class FeedToken(Base):
+    """Capability bearer du feed ICS (spec §2.6).
+
+    Pas de RLS : la résolution se fait par `token_hash` (le secret EST l'auth) ;
+    le `tenant` porté par la ligne borne ensuite la lecture des contrats.
+    On ne stocke que le hash SHA256 du token, jamais le token en clair.
+    """
+
+    __tablename__ = "feed_token"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    sujet: Mapped[str] = mapped_column(String(255))  # utilisateur Keycloak
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    revoque: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
