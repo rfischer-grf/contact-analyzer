@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     app_name: str = "Contract Intelligence (CLM souverain)"
     environment: str = "dev"
 
+    # --- Base de données (PostgreSQL, source de vérité unique) ---
+    database_url: str = "postgresql+psycopg://clm:clm@localhost:5432/clm"
+
     # --- Keycloak / OIDC ---
     oidc_issuer: str = "http://localhost:8080/realms/clm"
     oidc_jwks_url: str | None = None  # dérivé de l'issuer si absent

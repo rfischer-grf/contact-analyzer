@@ -19,6 +19,11 @@ api = [
 worker = [
     "temporalio>=1.5",
 ]
+db = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.4",
@@ -61,3 +66,6 @@ mypy_path = "src"
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "db: nécessite un PostgreSQL (variable CI_TEST_DATABASE_URL) — RLS/migrations",
+]

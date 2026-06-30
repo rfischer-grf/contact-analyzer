@@ -42,11 +42,13 @@ Voir `docs/architecture.md` §5 pour le détail et §7 pour les garde-fous expli
 docs/architecture.md          # source de vérité des décisions d'architecture
 src/contract_intelligence/
   config.py                   # settings (pydantic-settings, préfixe CI_)
-  domain/                     # modèles §3 (Champ/Provenance + entités) + calculs
+  domain/                     # modèles §3 (Champ/Provenance + entités) + état effectif (fold)
+  db/                         # ORM (document/contrat/audit/séries), session tenant, committer()
   api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/…
   worker/                     # saga Temporal : états, workflows, activities
+migrations/                   # Alembic : schéma initial + RLS multi-tenant + audit append-only
 infra/                        # docker-compose, Keycloak (realm), Garage (config), .env
-tests/                        # pytest (domaine, calculs, API, états saga)
+tests/                        # pytest (domaine, calculs, fold, committer, API, RLS)
 ```
 
 ## Développement
@@ -59,15 +61,23 @@ cd infra && cp .env.example .env && docker compose up -d
 
 # 2) Environnement Python + dépendances
 uv venv --python 3.11 .venv
-uv pip install -e ".[api,worker,dev]"
+uv pip install -e ".[api,worker,db,dev]"
 
-# 3) Qualité (= CI)
+# 3) Migrations (PostgreSQL : schéma + RLS multi-tenant + audit append-only)
+export CI_DATABASE_URL=postgresql+psycopg://clm:clm@localhost:5432/clm
+.venv/bin/alembic upgrade head
+
+# 4) Qualité (= CI)
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy src && .venv/bin/pytest
 
-# 4) Lancer l'API et le worker
+# 5) Lancer l'API et le worker
 .venv/bin/uvicorn contract_intelligence.api.app:app --reload   # http://localhost:8000/health
 .venv/bin/python -m contract_intelligence.worker.bootstrap
 ```
+
+> Tests : `pytest` exécute la suite hors-DB ; les tests RLS/migrations (marqueur
+> `db`) tournent en CI avec un service PostgreSQL, ou en local via
+> `CI_TEST_DATABASE_URL=… .venv/bin/pytest -m db`.
 
 UIs de dev : Keycloak `:8080`, Temporal `:8233`, Mailpit `:8025`, garage-webui `:3909`,
 Weaviate `:8081`. Utilisateurs Keycloak de test : `alice`/`alice` (tenant `acme`),

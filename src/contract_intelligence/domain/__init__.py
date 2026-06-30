@@ -11,6 +11,7 @@ from .entites import (
     Signataire,
     UnitePreavis,
 )
+from .etat_effectif import EtatEffectif, PieceVersee, fold_etat_effectif
 
 __all__ = [
     "Champ",
@@ -24,4 +25,7 @@ __all__ = [
     "Contrat",
     "calculer_date_limite_denonciation",
     "date_limite_denonciation",
+    "EtatEffectif",
+    "PieceVersee",
+    "fold_etat_effectif",
 ]
