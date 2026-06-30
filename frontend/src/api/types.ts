@@ -83,6 +83,8 @@ export interface ConfirmRequete {
 export interface ConfirmReponse {
   cle: string;
   etat: string;
+  /** ID de la saga Temporal démarrée (à utiliser pour le suivi de statut). */
+  workflow_id: string;
 }
 
 /* --------------------------------------------------------------------------

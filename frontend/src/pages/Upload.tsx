@@ -109,10 +109,8 @@ export function Upload(): JSX.Element {
       setMessage("Confirmation de l'upload…");
       const confirm = await api.uploads.confirm({ sha256 });
 
-      // Le workflow Temporal est idempotent sur le SHA256 (spec §2.1) ; tant que
-      // l'API ne renvoie pas explicitement le workflow_id, on s'aligne sur cette
-      // convention. TODO(#16/#22) : utiliser le workflow_id renvoyé par /confirm.
-      const id = sha256;
+      // L'API démarre la saga Temporal et renvoie son workflow_id (scopé tenant).
+      const id = confirm.workflow_id;
       setWorkflowId(id);
       setStatut(confirm.etat);
       setMessage(`Upload confirmé (clé ${confirm.cle}). Suivi de l'ingestion en cours…`);

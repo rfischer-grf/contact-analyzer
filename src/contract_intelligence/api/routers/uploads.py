@@ -73,13 +73,46 @@ class ConfirmRequest(BaseModel):
     sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
 
 
-@router.post("/confirm", status_code=status.HTTP_202_ACCEPTED)
-def confirm(
+class ConfirmResponse(BaseModel):
+    cle: str
+    etat: str
+    workflow_id: str
+
+
+def _workflow_id(tenant: str, sha256: str) -> str:
+    """ID de saga = tenant + SHA256 (idempotent ; scopé tenant, sans `/` pour l'URL statut)."""
+    return f"{tenant}:{sha256.lower()}"
+
+
+async def _demarrer_ingestion(settings: Settings, tenant: str, sha256: str) -> str:
+    """Démarre la saga Temporal (idempotent sur le workflow_id). Import différé pour
+    ne pas coupler l'API à `temporalio` au chargement (cf. routers/statut.py)."""
+    from temporalio.client import Client
+    from temporalio.exceptions import WorkflowAlreadyStartedError
+
+    from ...worker.workflows import IngestionWorkflow
+
+    workflow_id = _workflow_id(tenant, sha256)
+    client = await Client.connect(settings.temporal_target, namespace=settings.temporal_namespace)
+    try:
+        await client.start_workflow(
+            IngestionWorkflow.run,
+            sha256,
+            id=workflow_id,
+            task_queue=settings.temporal_task_queue,
+        )
+    except WorkflowAlreadyStartedError:
+        pass  # ré-confirmation du même fichier : la saga tourne déjà.
+    return workflow_id
+
+
+@router.post("/confirm", status_code=status.HTTP_202_ACCEPTED, response_model=ConfirmResponse)
+async def confirm(
     req: ConfirmRequest,
     principal: Principal = Depends(get_principal),
     settings: Settings = Depends(get_settings),
-) -> dict[str, str]:
-    """HEAD l'objet puis (TODO #16) démarre le workflow Temporal, idempotent sur le SHA256."""
+) -> ConfirmResponse:
+    """HEAD l'objet (endpoint interne) puis démarre la saga Temporal, idempotent sur le SHA256."""
     cle = _objet_cle(principal.tenant, req.sha256)
     client = _s3_client(settings)
     try:
@@ -89,5 +122,5 @@ def confirm(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Objet introuvable : l'upload n'est pas confirmé",
         ) from exc
-    # TODO(#16) : démarrer le workflow Temporal d'ingestion (workflow_id dérivé du SHA256).
-    return {"cle": cle, "etat": "RECU"}
+    workflow_id = await _demarrer_ingestion(settings, principal.tenant, req.sha256)
+    return ConfirmResponse(cle=cle, etat="RECU", workflow_id=workflow_id)
