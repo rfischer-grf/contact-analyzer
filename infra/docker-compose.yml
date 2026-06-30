@@ -65,12 +65,19 @@ services:
       - garage_data:/var/lib/garage/data
 
   garage-webui:
-    image: khairul169/garage-webui:latest
+    # Épinglé : la série 1.0.x parle l'API admin /v1 de Garage v1.0.1. À partir de
+    # 1.1.0 le webui passe à l'API admin /v2 (Garage v2.x) → « Unknown API endpoint
+    # GET /v2/ListBuckets » et aucun bucket affiché. À remonter avec Garage.
+    image: khairul169/garage-webui:1.0.9
     depends_on:
       - garage
     environment:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
+    # Le webui lit /etc/garage.toml pour le token admin ([admin] admin_token) :
+    # sans ce montage il ne peut pas interroger l'API admin → aucun bucket listé.
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
     ports:
       - "3909:3909"
 
