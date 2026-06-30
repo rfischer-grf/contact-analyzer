@@ -1,0 +1,109 @@
+# Stack de dev — Contract Intelligence (CLM souverain). Cf. docs/architecture.md §5.
+# Garde-fous (§7) : Garage (jamais MinIO), Weaviate (jamais pgvector), Mailpit en dev,
+# pas de Redis sans besoin concret.
+#
+# Démarrage : `cp .env.example .env && docker compose up -d`
+# Provisioning Garage (bucket + clés) : voir README, étape post-démarrage (#4).
+
+name: clm
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clm}
+      POSTGRES_DB: ${POSTGRES_DB:-clm}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    ports:
+      - "3900:3900" # S3 API
+      - "3902:3902" # S3 web
+      - "3903:3903" # admin API
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+
+  garage-webui:
+    image: khairul169/garage-webui:latest
+    depends_on:
+      - garage
+    environment:
+      API_BASE_URL: "http://garage:3903"
+      S3_ENDPOINT_URL: "http://garage:3900"
+    ports:
+      - "3909:3909"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+
+  temporal:
+    image: temporalio/temporal:latest
+    command:
+      ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    ports:
+      - "7233:7233" # gRPC
+      - "8233:8233" # Web UI
+    volumes:
+      - temporal_data:/data
+
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "3310:3310"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s # première mise à jour des signatures
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.25.5
+    command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
+    environment:
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      QUERY_DEFAULTS_LIMIT: "25"
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true" # dev uniquement
+      DEFAULT_VECTORIZER_MODULE: "none" # BYO vectors (§6) — pas de vectorizer
+      ENABLE_MODULES: ""
+    ports:
+      - "8081:8080" # REST (host 8081 pour éviter le conflit avec Keycloak)
+      - "50051:50051" # gRPC
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+    volumes:
+      - mailpit_data:/data
+
+volumes:
+  pg_data:
+  garage_meta:
+  garage_data:
+  temporal_data:
+  weaviate_data:
+  mailpit_data:
