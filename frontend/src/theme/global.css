@@ -1,0 +1,133 @@
+/*
+ * Styles de base globaux du cockpit Clausio — ticket #72.
+ *
+ * Ce fichier ne contient AUCUNE valeur de design en dur : il consomme uniquement
+ * les variables CSS (--clausio-*) injectées par `applyTheme()` (cf. index.ts) à
+ * partir de `tokens.ts`. Le skin Clausio exact (#83) se règle donc soit dans
+ * `tokens.ts`, soit ici pour les règles structurelles.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--clausio-police-base);
+  font-size: var(--clausio-taille-base);
+  line-height: var(--clausio-hauteur-ligne-base);
+  color: var(--clausio-texte);
+  background: var(--clausio-fond);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: var(--clausio-graisse-semi);
+  line-height: var(--clausio-hauteur-ligne-serree);
+  color: var(--clausio-texte);
+}
+
+h1 {
+  font-size: var(--clausio-taille-xl);
+}
+h2 {
+  font-size: var(--clausio-taille-lg);
+}
+h3 {
+  font-size: var(--clausio-taille-md);
+}
+
+p {
+  margin: 0 0 var(--clausio-espace-md);
+}
+
+a {
+  color: var(--clausio-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+pre {
+  font-family: var(--clausio-police-mono);
+  font-size: var(--clausio-taille-sm);
+}
+
+/* Champs de formulaire : apparence cohérente, pilotée par les jetons. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: var(--clausio-taille-base);
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: var(--clausio-espace-sm) var(--clausio-espace-md);
+  border: 1px solid var(--clausio-bordure);
+  border-radius: var(--clausio-rayon-md);
+  background: var(--clausio-surface);
+  color: var(--clausio-texte);
+  transition: border-color var(--clausio-transition-base),
+    box-shadow var(--clausio-transition-base);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--clausio-accent);
+  box-shadow: 0 0 0 3px var(--clausio-accent-doux);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Accessibilité : anneau de focus visible et cohérent. */
+:focus-visible {
+  outline: 2px solid var(--clausio-accent);
+  outline-offset: 2px;
+}
+
+/* Barre de défilement sobre. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--clausio-bordure-forte);
+  border-radius: var(--clausio-rayon-rond);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
