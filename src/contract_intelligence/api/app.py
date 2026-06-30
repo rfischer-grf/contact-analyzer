@@ -5,7 +5,16 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from ..config import get_settings
-from .routers import health, hitl, ics, recherche, statut, uploads
+from .routers import (
+    contrats,
+    health,
+    hitl,
+    ics,
+    recherche,
+    statut,
+    tableau_de_bord,
+    uploads,
+)
 
 
 def create_app() -> FastAPI:
@@ -17,6 +26,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(uploads.router)
+    app.include_router(contrats.router)
+    app.include_router(tableau_de_bord.router)
     app.include_router(hitl.router)
     app.include_router(recherche.router)
     app.include_router(statut.router)
