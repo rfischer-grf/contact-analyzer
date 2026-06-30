@@ -44,6 +44,8 @@ class Contrat(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tenant: Mapped[str] = mapped_column(String(64), index=True)
     reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # État de la saga d'ingestion (A_VALIDER, COMMITE, REJETE_*) — pilote la file HITL (#35).
+    etat: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
 
     # --- État effectif (folé sur la chaîne de documents) ---
     fournisseur_siren: Mapped[str | None] = mapped_column(String(16), nullable=True)

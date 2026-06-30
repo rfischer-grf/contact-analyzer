@@ -57,6 +57,34 @@ class Settings(BaseSettings):
     temporal_namespace: str = "default"
     temporal_task_queue: str = "ingestion"
 
+    # --- Contrôles d'ingestion (§2.1) ---
+    upload_taille_max_octets: int = 50_000_000  # 50 Mo
+    upload_types_mime: list[str] = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    ]
+
+    # --- Antivirus ClamAV (clamd) ---
+    clamav_host: str = "localhost"
+    clamav_port: int = 3310
+
+    # --- Parsing Docling / OCR ---
+    docling_ocr_si_scanne: bool = True  # OCR RapidOCR conditionnel (si pas de couche texte)
+
+    # --- Extraction LLM (Scaleway Generative APIs / vLLM, souverain EU) ---
+    llm_base_url: str | None = None  # ex. https://api.scaleway.ai/v1 (OpenAI-compatible)
+    llm_modele: str = "mistral-small-3.2-24b-instruct-2506"
+    llm_api_key: str = ""
+    llm_seuil_retrieve_caracteres: int = 60_000  # au-delà : retrieve des clauses utiles
+
+    # --- Recherche & RAG (Weaviate ; embeddings BYO découplés) ---
+    weaviate_url: str | None = None  # None → store Fake en mémoire (dev/test)
+    weaviate_api_key: str = ""
+    embeddings_base_url: str | None = None  # endpoint OpenAI-compatible d'embeddings
+    embeddings_modele: str = "bge-m3"
+    embeddings_dimension: int = 1024
+
     @property
     def jwks_url(self) -> str:
         return self.oidc_jwks_url or f"{self.oidc_issuer}/protocol/openid-connect/certs"
