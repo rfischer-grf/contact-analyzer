@@ -9,8 +9,8 @@ import { tokens } from "../../theme";
  * signal correspondant est émis au workflow Temporal en attente.
  *
  * Contrat de thème supposé (fourni par la fondation) :
- *   tokens.couleur.{accent, accentDoux, accentFort, danger, dangerDoux, texteInverse, texteAttenue, bordure, info, infoDoux}
- *   tokens.espace.{sm, md, lg}  ·  tokens.rayon.md  ·  tokens.police.{sm, md}
+ *   tokens.couleurs.{accent, accentDoux, accentFort, danger, dangerDoux, texteInverse, texteAttenue, bordure, info, infoDoux}
+ *   tokens.espacements.{sm, md, lg}  ·  tokens.rayons.md  ·  tokens.typo.taille.{sm, md}
  */
 
 interface BarreDecisionProps {
@@ -22,14 +22,14 @@ interface BarreDecisionProps {
 
 export function BarreDecision({ onValider, onRejeter, enCours }: BarreDecisionProps): JSX.Element {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: tokens.espace.md }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: tokens.espacements.md }}>
       <p
         style={{
-          fontSize: tokens.police.sm,
-          color: tokens.couleur.info,
-          background: tokens.couleur.infoDoux,
-          padding: tokens.espace.sm,
-          borderRadius: tokens.rayon.md,
+          fontSize: tokens.typo.taille.sm,
+          color: tokens.couleurs.info,
+          background: tokens.couleurs.infoDoux,
+          padding: tokens.espacements.sm,
+          borderRadius: tokens.rayons.md,
           margin: 0,
         }}
       >
@@ -37,19 +37,19 @@ export function BarreDecision({ onValider, onRejeter, enCours }: BarreDecisionPr
         et la recherche (Weaviate). Aucune donnée « à valider » n'est propagée en aval.
       </p>
 
-      <div style={{ display: "flex", gap: tokens.espace.sm }}>
+      <div style={{ display: "flex", gap: tokens.espacements.sm }}>
         <button
           type="button"
           onClick={onValider}
           disabled={enCours}
           style={{
             flex: 1,
-            background: tokens.couleur.accent,
-            color: tokens.couleur.texteInverse,
+            background: tokens.couleurs.accent,
+            color: tokens.couleurs.texteInverse,
             border: "none",
-            borderRadius: tokens.rayon.md,
-            padding: `${tokens.espace.sm} ${tokens.espace.lg}`,
-            fontSize: tokens.police.md,
+            borderRadius: tokens.rayons.md,
+            padding: `${tokens.espacements.sm} ${tokens.espacements.lg}`,
+            fontSize: tokens.typo.taille.md,
             fontWeight: 600,
             cursor: enCours ? "not-allowed" : "pointer",
             opacity: enCours ? 0.6 : 1,
@@ -63,12 +63,12 @@ export function BarreDecision({ onValider, onRejeter, enCours }: BarreDecisionPr
           disabled={enCours}
           style={{
             flex: 1,
-            background: tokens.couleur.dangerDoux,
-            color: tokens.couleur.danger,
-            border: `1px solid ${tokens.couleur.danger}`,
-            borderRadius: tokens.rayon.md,
-            padding: `${tokens.espace.sm} ${tokens.espace.lg}`,
-            fontSize: tokens.police.md,
+            background: tokens.couleurs.dangerDoux,
+            color: tokens.couleurs.danger,
+            border: `1px solid ${tokens.couleurs.danger}`,
+            borderRadius: tokens.rayons.md,
+            padding: `${tokens.espacements.sm} ${tokens.espacements.lg}`,
+            fontSize: tokens.typo.taille.md,
             fontWeight: 600,
             cursor: enCours ? "not-allowed" : "pointer",
             opacity: enCours ? 0.6 : 1,

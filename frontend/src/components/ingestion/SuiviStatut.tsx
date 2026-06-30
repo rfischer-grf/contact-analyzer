@@ -10,8 +10,8 @@ import type { EtatIngestion } from "../../api/types";
  * fourni par le parent qui polle `api.statut.get(workflowId)`.
  *
  * Contrat de thème supposé (fourni par la fondation, cf. CarteKpi) :
- *   tokens.couleur.{fondCarte, bordure, texte, texteAttenue, accent, succes, danger, attention}
- *   tokens.espace.{xs, sm, md, lg}  ·  tokens.rayon.{md, rond}  ·  tokens.police.{xs, sm, md}
+ *   tokens.couleurs.{surface, bordure, texte, texteAttenue, accent, succes, danger, attention}
+ *   tokens.espacements.{xs, sm, md, lg}  ·  tokens.rayons.{md, rond}  ·  tokens.typo.taille.{xs, sm, md}
  */
 
 /** Étapes nominales dans l'ordre, hors états de rejet (branche d'échec). */
@@ -46,17 +46,17 @@ export function SuiviStatut({ statut }: SuiviStatutProps): JSX.Element {
   return (
     <div
       style={{
-        background: tokens.couleur.fondCarte,
-        border: `1px solid ${tokens.couleur.bordure}`,
-        borderRadius: tokens.rayon.md,
-        padding: tokens.espace.lg,
+        background: tokens.couleurs.surface,
+        border: `1px solid ${tokens.couleurs.bordure}`,
+        borderRadius: tokens.rayons.md,
+        padding: tokens.espacements.lg,
       }}
     >
       <div
         style={{
-          fontSize: tokens.police.sm,
-          color: tokens.couleur.texteAttenue,
-          marginBottom: tokens.espace.md,
+          fontSize: tokens.typo.taille.sm,
+          color: tokens.couleurs.texteAttenue,
+          marginBottom: tokens.espacements.md,
         }}
       >
         Avancement de l'ingestion
@@ -69,33 +69,33 @@ export function SuiviStatut({ statut }: SuiviStatutProps): JSX.Element {
           padding: 0,
           display: "flex",
           flexDirection: "column",
-          gap: tokens.espace.sm,
+          gap: tokens.espacements.sm,
         }}
       >
         {ETAPES_NOMINALES.map((etape, i) => {
           const atteinte = courant >= 0 && i <= courant;
           const active = i === courant;
-          const couleurPastille = atteinte ? tokens.couleur.accent : tokens.couleur.bordure;
+          const couleurPastille = atteinte ? tokens.couleurs.accent : tokens.couleurs.bordure;
           return (
             <li
               key={etape.etat}
-              style={{ display: "flex", alignItems: "center", gap: tokens.espace.sm }}
+              style={{ display: "flex", alignItems: "center", gap: tokens.espacements.sm }}
             >
               <span
                 aria-hidden
                 style={{
                   width: 12,
                   height: 12,
-                  borderRadius: tokens.rayon.rond,
+                  borderRadius: tokens.rayons.rond,
                   background: couleurPastille,
                   flex: "0 0 auto",
-                  boxShadow: active ? `0 0 0 3px ${tokens.couleur.accentDoux}` : "none",
+                  boxShadow: active ? `0 0 0 3px ${tokens.couleurs.accentDoux}` : "none",
                 }}
               />
               <span
                 style={{
-                  fontSize: tokens.police.md,
-                  color: atteinte ? tokens.couleur.texte : tokens.couleur.texteAttenue,
+                  fontSize: tokens.typo.taille.md,
+                  color: atteinte ? tokens.couleurs.texte : tokens.couleurs.texteAttenue,
                   fontWeight: active ? 600 : 400,
                 }}
               >
@@ -110,12 +110,12 @@ export function SuiviStatut({ statut }: SuiviStatutProps): JSX.Element {
         <div
           role="alert"
           style={{
-            marginTop: tokens.espace.md,
-            padding: tokens.espace.sm,
-            borderRadius: tokens.rayon.md,
-            background: tokens.couleur.dangerDoux,
-            color: tokens.couleur.danger,
-            fontSize: tokens.police.sm,
+            marginTop: tokens.espacements.md,
+            padding: tokens.espacements.sm,
+            borderRadius: tokens.rayons.md,
+            background: tokens.couleurs.dangerDoux,
+            color: tokens.couleurs.danger,
+            fontSize: tokens.typo.taille.sm,
           }}
         >
           {statut === "REJETE_TECHNIQUE"
@@ -126,9 +126,9 @@ export function SuiviStatut({ statut }: SuiviStatutProps): JSX.Element {
 
       <div
         style={{
-          marginTop: tokens.espace.md,
-          fontSize: tokens.police.xs,
-          color: tokens.couleur.texteAttenue,
+          marginTop: tokens.espacements.md,
+          fontSize: tokens.typo.taille.xs,
+          color: tokens.couleurs.texteAttenue,
         }}
       >
         État courant : <strong>{statut ?? "—"}</strong>

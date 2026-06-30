@@ -126,16 +126,16 @@ export function Upload(): JSX.Element {
 
   return (
     <section>
-      <h2 style={{ fontSize: tokens.police.xl, color: tokens.couleur.texte, marginTop: 0 }}>
+      <h2 style={{ fontSize: tokens.typo.taille.xl, color: tokens.couleurs.texte, marginTop: 0 }}>
         Déposer un contrat fournisseur
       </h2>
-      <p style={{ color: tokens.couleur.texteAttenue, fontSize: tokens.police.sm }}>
+      <p style={{ color: tokens.couleurs.texteAttenue, fontSize: tokens.typo.taille.sm }}>
         Le fichier part directement vers le stockage souverain (S3/Garage) via une URL
         présignée. Les octets ne transitent jamais par l'API. La clé canonique est le
         SHA256 du fichier (dédoublonnage et idempotence).
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: tokens.espace.xl, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: tokens.espacements.xl, alignItems: "start" }}>
         <div>
           <DepotFichier
             fichier={fichier}
@@ -145,7 +145,7 @@ export function Upload(): JSX.Element {
           />
 
           {message && (
-            <p style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue, marginTop: tokens.espace.md }}>
+            <p style={{ fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue, marginTop: tokens.espacements.md }}>
               {message}
             </p>
           )}
@@ -153,12 +153,12 @@ export function Upload(): JSX.Element {
             <p
               role="alert"
               style={{
-                fontSize: tokens.police.sm,
-                color: tokens.couleur.danger,
-                background: tokens.couleur.dangerDoux,
-                padding: tokens.espace.sm,
-                borderRadius: tokens.rayon.md,
-                marginTop: tokens.espace.md,
+                fontSize: tokens.typo.taille.sm,
+                color: tokens.couleurs.danger,
+                background: tokens.couleurs.dangerDoux,
+                padding: tokens.espacements.sm,
+                borderRadius: tokens.rayons.md,
+                marginTop: tokens.espacements.md,
               }}
             >
               Erreur : {erreur}
@@ -166,13 +166,13 @@ export function Upload(): JSX.Element {
           )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: tokens.espace.md }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: tokens.espacements.md }}>
           {workflowId ? (
             <>
               <div
                 style={{
-                  fontSize: tokens.police.xs,
-                  color: tokens.couleur.texteAttenue,
+                  fontSize: tokens.typo.taille.xs,
+                  color: tokens.couleurs.texteAttenue,
                   wordBreak: "break-all",
                 }}
               >
@@ -182,11 +182,11 @@ export function Upload(): JSX.Element {
               {statut === "A_VALIDER" && (
                 <p
                   style={{
-                    fontSize: tokens.police.sm,
-                    color: tokens.couleur.accentFort,
-                    background: tokens.couleur.accentDoux,
-                    padding: tokens.espace.sm,
-                    borderRadius: tokens.rayon.md,
+                    fontSize: tokens.typo.taille.sm,
+                    color: tokens.couleurs.accentFort,
+                    background: tokens.couleurs.accentDoux,
+                    padding: tokens.espacements.sm,
+                    borderRadius: tokens.rayons.md,
                   }}
                 >
                   Prêt pour la validation humaine : voir l'onglet « Validation (HITL) ».
@@ -217,16 +217,16 @@ function SuiviChamp({ onSuivre }: { onSuivre: (id: string) => void }): JSX.Eleme
   return (
     <div
       style={{
-        border: `1px solid ${tokens.couleur.bordure}`,
-        borderRadius: tokens.rayon.md,
-        padding: tokens.espace.md,
-        background: tokens.couleur.fondCarte,
+        border: `1px solid ${tokens.couleurs.bordure}`,
+        borderRadius: tokens.rayons.md,
+        padding: tokens.espacements.md,
+        background: tokens.couleurs.surface,
       }}
     >
-      <div style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue, marginBottom: tokens.espace.sm }}>
+      <div style={{ fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue, marginBottom: tokens.espacements.sm }}>
         Suivre une ingestion existante (workflow_id) :
       </div>
-      <div style={{ display: "flex", gap: tokens.espace.sm }}>
+      <div style={{ display: "flex", gap: tokens.espacements.sm }}>
         <input
           value={valeur}
           onChange={(e) => setValeur(e.target.value)}
@@ -234,10 +234,10 @@ function SuiviChamp({ onSuivre }: { onSuivre: (id: string) => void }): JSX.Eleme
           style={{
             flex: 1,
             minWidth: 0,
-            border: `1px solid ${tokens.couleur.bordure}`,
-            borderRadius: tokens.rayon.md,
-            padding: tokens.espace.sm,
-            fontSize: tokens.police.sm,
+            border: `1px solid ${tokens.couleurs.bordure}`,
+            borderRadius: tokens.rayons.md,
+            padding: tokens.espacements.sm,
+            fontSize: tokens.typo.taille.sm,
           }}
         />
         <button
@@ -245,12 +245,12 @@ function SuiviChamp({ onSuivre }: { onSuivre: (id: string) => void }): JSX.Eleme
           onClick={() => valeur.trim() && onSuivre(valeur.trim())}
           disabled={!valeur.trim()}
           style={{
-            background: tokens.couleur.accent,
-            color: tokens.couleur.texteInverse,
+            background: tokens.couleurs.accent,
+            color: tokens.couleurs.texteInverse,
             border: "none",
-            borderRadius: tokens.rayon.md,
-            padding: `${tokens.espace.sm} ${tokens.espace.md}`,
-            fontSize: tokens.police.sm,
+            borderRadius: tokens.rayons.md,
+            padding: `${tokens.espacements.sm} ${tokens.espacements.md}`,
+            fontSize: tokens.typo.taille.sm,
             cursor: valeur.trim() ? "pointer" : "not-allowed",
             opacity: valeur.trim() ? 1 : 0.6,
           }}

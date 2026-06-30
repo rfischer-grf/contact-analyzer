@@ -152,10 +152,10 @@ export function Validation(): JSX.Element {
 
   return (
     <section>
-      <h2 style={{ fontSize: tokens.police.xl, color: tokens.couleur.texte, marginTop: 0 }}>
+      <h2 style={{ fontSize: tokens.typo.taille.xl, color: tokens.couleurs.texte, marginTop: 0 }}>
         Validation humaine (HITL)
       </h2>
-      <p style={{ color: tokens.couleur.texteAttenue, fontSize: tokens.police.sm }}>
+      <p style={{ color: tokens.couleurs.texteAttenue, fontSize: tokens.typo.taille.sm }}>
         Vérifier chaque champ sous le seuil de confiance contre la source surlignée, corriger
         si besoin, puis décider. Un préavis ou une date mal extraits = engagement raté.
       </p>
@@ -164,29 +164,29 @@ export function Validation(): JSX.Element {
       <div
         style={{
           display: "flex",
-          gap: tokens.espace.sm,
+          gap: tokens.espacements.sm,
           alignItems: "flex-end",
           flexWrap: "wrap",
-          marginBottom: tokens.espace.lg,
+          marginBottom: tokens.espacements.lg,
         }}
       >
-        <label style={{ display: "flex", flexDirection: "column", fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue }}>
+        <label style={{ display: "flex", flexDirection: "column", fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue }}>
           Contrat (id)
           <input
             value={contratId}
             onChange={(e) => setContratId(e.target.value)}
             placeholder="UUID du contrat"
             style={{
-              marginTop: tokens.espace.xs,
-              border: `1px solid ${tokens.couleur.bordure}`,
-              borderRadius: tokens.rayon.md,
-              padding: tokens.espace.sm,
-              fontSize: tokens.police.sm,
+              marginTop: tokens.espacements.xs,
+              border: `1px solid ${tokens.couleurs.bordure}`,
+              borderRadius: tokens.rayons.md,
+              padding: tokens.espacements.sm,
+              fontSize: tokens.typo.taille.sm,
               minWidth: 280,
             }}
           />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue }}>
+        <label style={{ display: "flex", flexDirection: "column", fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue }}>
           Seuil de confiance
           <input
             type="number"
@@ -196,11 +196,11 @@ export function Validation(): JSX.Element {
             value={seuil}
             onChange={(e) => setSeuil(Number(e.target.value))}
             style={{
-              marginTop: tokens.espace.xs,
-              border: `1px solid ${tokens.couleur.bordure}`,
-              borderRadius: tokens.rayon.md,
-              padding: tokens.espace.sm,
-              fontSize: tokens.police.sm,
+              marginTop: tokens.espacements.xs,
+              border: `1px solid ${tokens.couleurs.bordure}`,
+              borderRadius: tokens.rayons.md,
+              padding: tokens.espacements.sm,
+              fontSize: tokens.typo.taille.sm,
               width: 100,
             }}
           />
@@ -210,12 +210,12 @@ export function Validation(): JSX.Element {
           onClick={() => void charger()}
           disabled={!contratId.trim() || chargement}
           style={{
-            background: tokens.couleur.accent,
-            color: tokens.couleur.texteInverse,
+            background: tokens.couleurs.accent,
+            color: tokens.couleurs.texteInverse,
             border: "none",
-            borderRadius: tokens.rayon.md,
-            padding: `${tokens.espace.sm} ${tokens.espace.lg}`,
-            fontSize: tokens.police.md,
+            borderRadius: tokens.rayons.md,
+            padding: `${tokens.espacements.sm} ${tokens.espacements.lg}`,
+            fontSize: tokens.typo.taille.md,
             fontWeight: 600,
             cursor: !contratId.trim() || chargement ? "not-allowed" : "pointer",
             opacity: !contratId.trim() || chargement ? 0.6 : 1,
@@ -229,11 +229,11 @@ export function Validation(): JSX.Element {
         <p
           role="alert"
           style={{
-            fontSize: tokens.police.sm,
-            color: tokens.couleur.danger,
-            background: tokens.couleur.dangerDoux,
-            padding: tokens.espace.sm,
-            borderRadius: tokens.rayon.md,
+            fontSize: tokens.typo.taille.sm,
+            color: tokens.couleurs.danger,
+            background: tokens.couleurs.dangerDoux,
+            padding: tokens.espacements.sm,
+            borderRadius: tokens.rayons.md,
           }}
         >
           {erreur}
@@ -245,12 +245,12 @@ export function Validation(): JSX.Element {
           style={{
             display: "grid",
             gridTemplateColumns: "360px minmax(0, 1fr)",
-            gap: tokens.espace.xl,
+            gap: tokens.espacements.xl,
             alignItems: "start",
           }}
         >
           {/* Colonne champs éditables + décision */}
-          <div style={{ display: "flex", flexDirection: "column", gap: tokens.espace.lg }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: tokens.espacements.lg }}>
             <ListeChamps
               champs={champs}
               selection={selection}
@@ -265,11 +265,11 @@ export function Validation(): JSX.Element {
             {info && (
               <p
                 style={{
-                  fontSize: tokens.police.sm,
-                  color: tokens.couleur.accentFort,
-                  background: tokens.couleur.accentDoux,
-                  padding: tokens.espace.sm,
-                  borderRadius: tokens.rayon.md,
+                  fontSize: tokens.typo.taille.sm,
+                  color: tokens.couleurs.accentFort,
+                  background: tokens.couleurs.accentDoux,
+                  padding: tokens.espacements.sm,
+                  borderRadius: tokens.rayons.md,
                   margin: 0,
                 }}
               >

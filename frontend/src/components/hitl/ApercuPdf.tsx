@@ -17,8 +17,8 @@ import type { Provenance } from "../../api/types";
  * vers le canevas (origine haut-gauche) via le viewport pdf.js.
  *
  * Contrat de thème supposé (fourni par la fondation) :
- *   tokens.couleur.{fondCarte, bordure, texteAttenue, attention, attentionDoux}
- *   tokens.espace.{md, lg}  ·  tokens.rayon.md  ·  tokens.police.sm
+ *   tokens.couleurs.{surface, bordure, texteAttenue, attention, attentionDoux}
+ *   tokens.espacements.{md, lg}  ·  tokens.rayons.md  ·  tokens.typo.taille.sm
  */
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorker;
@@ -64,8 +64,8 @@ export function ApercuPdf({ documentUrl, provenance }: ApercuPdfProps): JSX.Elem
         boite.style.top = `${Math.min(vy0, vy1)}px`;
         boite.style.width = `${Math.abs(vx1 - vx0)}px`;
         boite.style.height = `${Math.abs(vy1 - vy0)}px`;
-        boite.style.outline = `2px solid ${tokens.couleur.attention}`;
-        boite.style.background = tokens.couleur.attentionDoux;
+        boite.style.outline = `2px solid ${tokens.couleurs.attention}`;
+        boite.style.background = tokens.couleurs.attentionDoux;
         boite.style.opacity = "0.45";
         overlay.appendChild(boite);
       }
@@ -82,12 +82,12 @@ export function ApercuPdf({ documentUrl, provenance }: ApercuPdfProps): JSX.Elem
     return (
       <div
         style={{
-          border: `1px solid ${tokens.couleur.bordure}`,
-          borderRadius: tokens.rayon.md,
-          background: tokens.couleur.fondCarte,
-          padding: tokens.espace.lg,
-          color: tokens.couleur.texteAttenue,
-          fontSize: tokens.police.sm,
+          border: `1px solid ${tokens.couleurs.bordure}`,
+          borderRadius: tokens.rayons.md,
+          background: tokens.couleurs.surface,
+          padding: tokens.espacements.lg,
+          color: tokens.couleurs.texteAttenue,
+          fontSize: tokens.typo.taille.sm,
           minHeight: 240,
           display: "flex",
           alignItems: "center",
@@ -108,8 +108,8 @@ export function ApercuPdf({ documentUrl, provenance }: ApercuPdfProps): JSX.Elem
     <div
       style={{
         position: "relative",
-        border: `1px solid ${tokens.couleur.bordure}`,
-        borderRadius: tokens.rayon.md,
+        border: `1px solid ${tokens.couleurs.bordure}`,
+        borderRadius: tokens.rayons.md,
         overflow: "auto",
         maxHeight: "75vh",
       }}
