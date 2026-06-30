@@ -6,8 +6,9 @@ Le vectoriel (Weaviate) sert uniquement au sémantique sur le corps des clauses 
 au RAG. Le `tenant` provient TOUJOURS du principal (token), jamais du client (§7).
 
 Le vector store et l'embeddeur sont injectés par dépendances surchargeables en
-test (`get_vector_store` / `get_embeddeur`). Le défaut est l'implémentation Fake
-en mémoire ; le client Weaviate réel relève de TODO(#48).
+test (`get_vector_store` / `get_embeddeur`). Le défaut suit la configuration :
+Weaviate (multi-tenancy natif) + embeddeur HTTP si renseignés (CI_WEAVIATE_URL /
+CI_EMBEDDINGS_BASE_URL), sinon repli sur les implémentations Fake en mémoire.
 """
 
 from __future__ import annotations
@@ -18,14 +19,15 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, sessionmaker
 
+from ...config import get_settings
 from ...db import tenant_session
 from ...rag import (
     Embeddeur,
-    FakeEmbeddeur,
-    FakeVectorStore,
     VectorStore,
+    embeddeur_par_defaut,
     recherche_facette,
     recherche_semantique,
+    store_par_defaut,
 )
 from ..auth import Principal, get_principal
 from ..deps import get_session_factory
@@ -35,17 +37,14 @@ router = APIRouter(prefix="/recherche", tags=["recherche"])
 
 @lru_cache
 def get_vector_store() -> VectorStore:
-    """Vector store partagé (défaut = Fake en mémoire). Surchargé en test.
-
-    TODO(#48) : renvoyer le client Weaviate réel (multi-tenancy natif).
-    """
-    return FakeVectorStore()
+    """Vector store partagé : Weaviate si `CI_WEAVIATE_URL`, sinon Fake. Surchargé en test."""
+    return store_par_defaut(get_settings())
 
 
 @lru_cache
 def get_embeddeur() -> Embeddeur:
-    """Embeddeur BYO partagé (défaut = Fake déterministe). Surchargé en test."""
-    return FakeEmbeddeur()
+    """Embeddeur BYO partagé : HTTP si `CI_EMBEDDINGS_BASE_URL`, sinon Fake. Surchargé en test."""
+    return embeddeur_par_defaut(get_settings())
 
 
 @router.get("/facette")

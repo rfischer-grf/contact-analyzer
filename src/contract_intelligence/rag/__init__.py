@@ -11,24 +11,32 @@ Garde-fous (§6, §7) :
   Le vectoriel sert uniquement au sémantique sur le corps des clauses et au RAG.
 - Embeddings **BYO**, découplés du store.
 
-Ici tout est implémenté contre des abstractions (`VectorStore`, `Embeddeur`) avec
-une implémentation `Fake` en mémoire. Le client Weaviate réel + le câblage de la
-saga sont laissés en TODO(#48).
+Tout est implémenté contre des abstractions (`VectorStore`, `Embeddeur`) :
+implémentations réelles `WeaviateVectorStore` (#48) / `EmbeddeurHTTP` (#51) et
+`Fake` en mémoire pour le dev/test. Les fabriques `store_par_defaut` /
+`embeddeur_par_defaut` choisissent l'impl. réelle ou le `Fake` selon la config.
+L'import des impl. réelles (et de leurs clients réseau) est **différé**.
 """
 
 from .chunking import decouper_par_clause
-from .embeddings import Embeddeur, FakeEmbeddeur
+from .embeddeur_http import EmbeddeurHTTP
+from .embeddings import Embeddeur, FakeEmbeddeur, embeddeur_par_defaut
 from .projection import projeter_contrat
 from .recherche import recherche_facette, recherche_semantique
 from .reconciliation import reconcilier
-from .store import Chunk, FakeVectorStore, VectorStore
+from .store import Chunk, FakeVectorStore, VectorStore, store_par_defaut
+from .weaviate_store import WeaviateVectorStore
 
 __all__ = [
     "Chunk",
     "VectorStore",
     "FakeVectorStore",
+    "WeaviateVectorStore",
+    "store_par_defaut",
     "Embeddeur",
     "FakeEmbeddeur",
+    "EmbeddeurHTTP",
+    "embeddeur_par_defaut",
     "decouper_par_clause",
     "projeter_contrat",
     "recherche_facette",

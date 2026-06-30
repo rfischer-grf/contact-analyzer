@@ -2,15 +2,19 @@
 
 Garde-fou (§6) : les embeddings sont **BYO** (bge-m3 / e5 local ou Mistral embed)
 et **découplés** du vector store — on n'impose aucun couplage entre le calcul du
-vecteur et son stockage. On définit ici un `Protocol` et une implémentation
-déterministe (hash → vecteur de dimension fixe) pour le dev et les tests. Le
-backend d'embeddings réel relève d'un ticket dédié.
+vecteur et son stockage. Ce module définit le `Protocol`, un `Fake` déterministe
+(hash → vecteur de dimension fixe) pour le dev/test, et la fabrique
+`embeddeur_par_defaut`. Le backend réel est `embeddeur_http.EmbeddeurHTTP`
+(endpoint OpenAI-compatible).
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from ..config import Settings
 
 DIMENSION_PAR_DEFAUT = 32
 
@@ -47,3 +51,24 @@ class FakeEmbeddeur:
 
     def vectoriser(self, textes: list[str]) -> list[list[float]]:
         return [self._vecteur(texte) for texte in textes]
+
+
+def embeddeur_par_defaut(settings: Settings) -> Embeddeur:
+    """Fabrique l'embeddeur par défaut selon la configuration.
+
+    - `embeddings_base_url` défini → `EmbeddeurHTTP` réel (OpenAI-compatible, #51).
+    - sinon → `FakeEmbeddeur` déterministe (dev/test, sans réseau), dimensionné
+      sur `embeddings_dimension`.
+
+    Import différé de l'impl. HTTP : appeler cette fabrique sans `embeddings_base_url`
+    n'importe jamais le module réel (ni `httpx`).
+    """
+    if settings.embeddings_base_url is not None:
+        from .embeddeur_http import EmbeddeurHTTP
+
+        return EmbeddeurHTTP(
+            base_url=settings.embeddings_base_url,
+            modele=settings.embeddings_modele,
+            dimension=settings.embeddings_dimension,
+        )
+    return FakeEmbeddeur(dimension=settings.embeddings_dimension)

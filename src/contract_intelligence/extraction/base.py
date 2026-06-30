@@ -5,19 +5,16 @@ L'extraction est la phase de **qualification** du pattern transverse
 Docling, on reconstruit un `Contrat` dont chaque champ porte
 **valeur + confiance + provenance** (cf. wrapper `Champ`, §3).
 
-Ce module ne définit que le **contrat d'interface** (`Protocol`). La couche
-data prend un markdown et rend un `Contrat` validé ; le branchement réel sur un
-LLM relève des tickets suivants — tenus hors de cette première itération qui
-livre l'abstraction et un `FakeExtracteur` testable, sans dépendance réseau.
+Ce module définit le **contrat d'interface** (`Protocol`). La couche data prend
+un markdown et rend un `Contrat` validé. Deux implémentations le satisfont :
 
-TODO(#28) : implémentation réelle via **Pydantic AI** — sortie structurée
-    validée contre le schéma du §3 (`Contrat` + `Champ`), avec re-validation
-    Pydantic v2 du JSON renvoyé par le modèle.
-TODO(#29) : connecteur **Scaleway Generative APIs** (Mistral Small 3.x, souverain
-    EU) ou self-host **vLLM** ; le 7B local réservé au pré-filtrage/classification.
-TODO(#30) : stratégie d'entrée — donner le **markdown Docling complet** pour un
-    contrat de 5–30 pages, sinon **retrieve** des clauses utiles (parties, durée,
-    résiliation, indexation) avant extraction si le document est volumineux.
+- `fake.FakeExtracteur` : déterministe, sans LLM ni réseau (tests / démo offline).
+- `llm.ExtracteurLLM` : implémentation réelle via **Pydantic AI** — sortie
+  structurée re-validée contre le schéma du §3 (`Contrat` + `Champ`) (#28),
+  connecteur **Scaleway Generative APIs** (Mistral Small 3.x, souverain EU) ou
+  self-host **vLLM** (#29), et stratégie d'entrée markdown complet vs retrieve
+  des clauses utiles selon la taille du document (#30). Sa dépendance
+  `pydantic_ai` est importée paresseusement → le core reste sans dépendance réseau.
 """
 
 from __future__ import annotations

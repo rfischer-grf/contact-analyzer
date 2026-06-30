@@ -1,19 +1,23 @@
 """Abstraction du vector store + implémentation Fake en mémoire (#49).
 
-Le store réel est **Weaviate** (spec §6, garde-fou §7 : jamais pgvector). On ne
-dépend pas du client `weaviate-client` ici : on définit un `Protocol` et une
-implémentation `Fake` testable. Le client Weaviate réel relève de TODO(#48).
+Le store réel est **Weaviate** (spec §6, garde-fou §7 : jamais pgvector),
+implémenté dans `weaviate_store.WeaviateVectorStore` (#48, multi-tenancy natif).
+Ce module définit le `Protocol`, le `Fake` testable en mémoire et la fabrique
+`store_par_defaut` (Weaviate si configuré, sinon Fake).
 
 Isolation multi-tenant (#49) : le store est cloisonné par `tenant`. La RLS
-Postgres ne protège PAS Weaviate → l'isolation est explicite dans le store
-(`{tenant: {contrat_id: [chunks]}}`) et le `tenant` est injecté côté API, jamais
-fourni par le client.
+Postgres ne protège PAS Weaviate → l'isolation est explicite (Fake :
+`{tenant: {contrat_id: [chunks]}}` ; Weaviate : multi-tenancy natif) et le
+`tenant` est injecté côté API, jamais fourni par le client.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from ..config import Settings
 
 
 @dataclass
@@ -34,7 +38,7 @@ class Chunk:
 
 
 class VectorStore(Protocol):
-    """Contrat minimal du vector store (impl. réelle = Weaviate, TODO(#48))."""
+    """Contrat minimal du vector store (impl. réelle = `WeaviateVectorStore`, #48)."""
 
     def upsert(self, tenant: str, contrat_id: str, chunks: list[Chunk]) -> None:
         """Réécrit l'ensemble des chunks d'un contrat (delete-then-insert)."""
@@ -96,3 +100,22 @@ class FakeVectorStore:
     def contrat_ids(self, tenant: str) -> set[str]:
         """Ensemble des `contrat_id` projetés pour ce tenant (diff de réconciliation)."""
         return set(self._par_tenant.get(tenant, {}).keys())
+
+
+def store_par_defaut(settings: Settings) -> VectorStore:
+    """Fabrique le vector store par défaut selon la configuration.
+
+    - `weaviate_url` défini → `WeaviateVectorStore` réel (multi-tenancy natif, #48).
+    - sinon → `FakeVectorStore` en mémoire (dev/test, sans réseau).
+
+    Import différé de l'impl. Weaviate : appeler cette fabrique sans `weaviate_url`
+    n'importe jamais le module réel (ni, a fortiori, le client `weaviate`).
+    """
+    if settings.weaviate_url is not None:
+        from .weaviate_store import WeaviateVectorStore
+
+        return WeaviateVectorStore(
+            url=settings.weaviate_url,
+            api_key=settings.weaviate_api_key,
+        )
+    return FakeVectorStore()

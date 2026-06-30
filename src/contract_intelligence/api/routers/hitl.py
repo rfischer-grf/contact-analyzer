@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from ...db import Document, tenant_session
-from ...hitl import champs_a_revoir, enregistrer_correction
+from ...hitl import champs_a_revoir, enregistrer_correction, file_de_revue
 from ...hitl.revue import SEUIL_PAR_DEFAUT
 from ..auth import Principal, get_principal
 from ..deps import get_session_factory
@@ -58,6 +59,40 @@ async def _signal_temporal(workflow_id: str, decision: str) -> None:
 
 def get_signal_sender() -> SignalSender:
     return _signal_temporal
+
+
+class ContratARevoir(BaseModel):
+    """Item de la file de revue globale : un contrat `A_VALIDER` en attente (#35)."""
+
+    id: str
+    reference: str | None = None
+    objet: str | None = None
+    date_echeance: date | None = None
+    fournisseur_siren: str | None = None
+
+
+@router.get("/file")
+def file_de_revue_endpoint(
+    principal: Principal = Depends(get_principal),
+    factory: sessionmaker[Session] = Depends(get_session_factory),
+) -> list[ContratARevoir]:
+    """File de revue HITL globale : contrats `A_VALIDER` du tenant (#35).
+
+    Garde-fou §2.4 : seuls les contrats en attente du gate sont listés ; aucun
+    contrat `COMMITE`/rejeté n'y figure. Le tenant provient du token (§7).
+    """
+    with tenant_session(factory, principal.tenant) as session:
+        resumes = file_de_revue(session, principal.tenant)
+    return [
+        ContratARevoir(
+            id=resume.id,
+            reference=resume.reference,
+            objet=resume.objet,
+            date_echeance=resume.date_echeance,
+            fournisseur_siren=resume.fournisseur_siren,
+        )
+        for resume in resumes
+    ]
 
 
 class CorrectionEntree(BaseModel):
