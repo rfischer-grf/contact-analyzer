@@ -5,7 +5,7 @@ piste d'audit append-only ; séries d'indices.
 """
 
 from .base import Base
-from .models import Contrat, Document, EvenementAudit, FeedToken, SerieIndice
+from .models import Contrat, Correction, Document, EvenementAudit, FeedToken, SerieIndice
 from .repository import committer
 from .session import make_engine, make_sessionmaker, tenant_session
 
@@ -13,6 +13,7 @@ __all__ = [
     "Base",
     "Document",
     "Contrat",
+    "Correction",
     "EvenementAudit",
     "SerieIndice",
     "FeedToken",
