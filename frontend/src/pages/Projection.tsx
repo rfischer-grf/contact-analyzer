@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { apiClient, ApiError } from "../api/client";
+import { api, ApiError } from "../api/client";
+import type {
+  ContratResume,
+  Indice,
+  ProjectionReponse,
+} from "../api/types";
 import { couleurs, espacements, rayons, typo } from "../theme/tokens";
 import {
   Bandeau,
@@ -21,8 +26,8 @@ import {
  * Projection tarifaire (#79, spec §2.5).
  *
  * On choisit un contrat indexé puis une date de révision (et une part fixe
- * optionnelle) → POST /contrats/{id}/projection expose le moteur de révision.
- * Formule : `P1 = P0 × (S1/S0)`, ou `P1 = P0 × (a + b·S1/S0)` avec part fixe `a`.
+ * optionnelle) → api.contrats.projection() expose le moteur de révision.
+ * Formule : `P1 = P0 × (S1/S0)`, ou `P1 = P0 × (a + b·S1/S0)` avec part fixe.
  *
  * Garde-fous rappelés à l'utilisateur :
  *  - la révision est BIDIRECTIONNELLE (le tarif peut BAISSER) — une clause de
@@ -30,28 +35,6 @@ import {
  *  - le coefficient de raccord Syntec 0,97975 s'applique aux actes de référence
  *    antérieurs à août 2022 ; il est appliqué à S0 par le moteur, on l'affiche.
  */
-
-interface ContratResume {
-  id: string;
-  reference: string | null;
-  objet: string | null;
-  fournisseur_siren: string | null;
-  indice: string | null;
-  montant: number | null;
-  devise: string | null;
-  date_echeance: string | null;
-  date_limite_denonciation: string | null;
-}
-
-interface ResultatProjection {
-  p0: number;
-  s0: number; // déjà raccordé (S0 × coefficient_raccord) côté moteur
-  s1: number;
-  coefficient_raccord: number;
-  p1: number;
-  periode_s0: string | null;
-  periode_s1: string;
-}
 
 const LIBELLES_INDICE: Record<string, string> = {
   syntec: "Syntec",
@@ -61,7 +44,7 @@ const LIBELLES_INDICE: Record<string, string> = {
   insee_autre: "INSEE (autre)",
 };
 
-function libelleIndice(indice: string | null): string {
+function libelleIndice(indice: Indice | undefined): string {
   if (!indice) return "—";
   return LIBELLES_INDICE[indice] ?? indice;
 }
@@ -81,7 +64,7 @@ export function Projection(): JSX.Element {
   const [avecPartFixe, setAvecPartFixe] = useState(false);
   const [partFixe, setPartFixe] = useState<string>("0.15");
 
-  const [resultat, setResultat] = useState<ResultatProjection | null>(null);
+  const [resultat, setResultat] = useState<ProjectionReponse | null>(null);
   const [calcul, setCalcul] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -91,7 +74,7 @@ export function Projection(): JSX.Element {
     let actif = true;
     void (async () => {
       try {
-        const liste = await apiClient.get<ContratResume[]>("/contrats?limite=200");
+        const liste = await api.contrats.lister({ limite: 200 });
         if (!actif) return;
         const indexes = liste.filter((c) => c.indice && c.indice !== "aucun");
         setContrats(indexes);
@@ -121,7 +104,7 @@ export function Projection(): JSX.Element {
     setErreur(null);
     setResultat(null);
 
-    // part_fixe ∈ [0,1] : la part variable est (1 − a). Non transmise si non cochée.
+    // part_fixe ∈ [0,1] : la part variable est (1 − a). Omise si non cochée.
     let pf: number | undefined;
     if (avecPartFixe) {
       const n = Number(partFixe.replace(",", "."));
@@ -134,10 +117,10 @@ export function Projection(): JSX.Element {
     }
 
     try {
-      const res = await apiClient.post<ResultatProjection>(
-        `/contrats/${encodeURIComponent(contratId)}/projection`,
-        { date_revision: dateRevision, part_fixe: pf ?? null },
-      );
+      const res = await api.contrats.projection(contratId, {
+        date_revision: dateRevision,
+        ...(pf !== undefined ? { part_fixe: pf } : {}),
+      });
       setResultat(res);
     } catch (e) {
       // 422 = donnée métier manquante (pas d'indice à la date, S0 absent, etc.).
@@ -238,7 +221,7 @@ export function Projection(): JSX.Element {
             }}
           >
             Indice : <strong>{libelleIndice(contratSelectionne.indice)}</strong>
-            {contratSelectionne.montant !== null && (
+            {contratSelectionne.montant !== undefined && (
               <>
                 {" · "}P0 actuel :{" "}
                 <strong>
@@ -283,7 +266,7 @@ function ResultatProjectionVue({
   resultat,
   devise,
 }: {
-  resultat: ResultatProjection;
+  resultat: ProjectionReponse;
   devise: string;
 }): JSX.Element {
   const sens = sensVariation(resultat.p0, resultat.p1);

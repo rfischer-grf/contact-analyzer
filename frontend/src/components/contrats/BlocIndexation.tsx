@@ -1,7 +1,3 @@
-import { tokens } from "../../theme";
-import type { ContratDetail } from "../../api/types";
-import { formatDate, libelleIndice } from "./format";
-
 /**
  * Bloc indexation du détail contrat (#76).
  *
@@ -14,24 +10,32 @@ import { formatDate, libelleIndice } from "./format";
  * explicitement que la révision à la baisse est garantie même si la clause d'origine
  * ne la prévoyait pas.
  */
+import type { ReactNode } from "react";
+import type { ContratDetail } from "../../api/types";
+import { Note } from "../analyse/primitives";
+import { stylePastille } from "../../theme";
+import { formaterDateIso, formaterNombre } from "../analyse/format";
+import { couleurs, espacements, typo } from "../../theme/tokens";
+import { estIndexe, libelleIndice } from "./format";
 
 interface BlocIndexationProps {
   contrat: ContratDetail;
 }
 
-const styleLigne: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: tokens.espace.md,
-  padding: `${tokens.espace.sm} 0`,
-  fontSize: tokens.police.sm,
-};
-
-function Ligne({ label, valeur }: { label: string; valeur: string }): JSX.Element {
+function Ligne({ label, valeur }: { label: string; valeur: ReactNode }): JSX.Element {
   return (
-    <div style={styleLigne}>
-      <span style={{ color: tokens.couleur.texteAttenue }}>{label}</span>
-      <span style={{ color: tokens.couleur.texte, fontWeight: 600, textAlign: "right" }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: espacements.md,
+        padding: `${espacements.sm} 0`,
+        borderBottom: `1px solid ${couleurs.bordure}`,
+        fontSize: typo.taille.base,
+      }}
+    >
+      <span style={{ color: couleurs.texteAttenue }}>{label}</span>
+      <span style={{ color: couleurs.texte, fontWeight: typo.graisse.semi, textAlign: "right" }}>
         {valeur}
       </span>
     </div>
@@ -39,21 +43,20 @@ function Ligne({ label, valeur }: { label: string; valeur: string }): JSX.Elemen
 }
 
 export function BlocIndexation({ contrat }: BlocIndexationProps): JSX.Element {
-  const indexe = !!contrat.indice && contrat.indice !== "aucun";
-
   return (
-    <div
-      style={{
-        background: tokens.couleur.fondCarte,
-        border: `1px solid ${tokens.couleur.bordure}`,
-        borderRadius: tokens.rayon.md,
-        padding: tokens.espace.lg,
-      }}
-    >
-      <h3 style={{ fontSize: tokens.police.lg, margin: `0 0 ${tokens.espace.sm}` }}>Indexation</h3>
+    <div>
+      <h3
+        style={{
+          fontSize: typo.taille.lg,
+          fontWeight: typo.graisse.semi,
+          margin: `0 0 ${espacements.sm}`,
+        }}
+      >
+        Indexation
+      </h3>
 
-      {!indexe ? (
-        <p style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue, margin: 0 }}>
+      {!estIndexe(contrat.indice) ? (
+        <p style={{ fontSize: typo.taille.sm, color: couleurs.texteFaible, margin: 0 }}>
           Contrat non indexé (aucune clause d'indexation).
         </p>
       ) : (
@@ -63,33 +66,33 @@ export function BlocIndexation({ contrat }: BlocIndexationProps): JSX.Element {
             label="Base S0"
             valeur={
               contrat.indice_base_valeur !== null && contrat.indice_base_valeur !== undefined
-                ? `${contrat.indice_base_valeur}${
+                ? `${formaterNombre(contrat.indice_base_valeur)}${
                     contrat.indice_base_periode ? ` (${contrat.indice_base_periode})` : ""
                   }`
                 : "—"
             }
           />
-          <Ligne label="Acte de référence tarifaire" valeur={formatDate(contrat.date_acte_reference)} />
+          <Ligne
+            label="Acte de référence tarifaire"
+            valeur={formaterDateIso(contrat.date_acte_reference)}
+          />
           <Ligne
             label="Sens de révision"
-            valeur={contrat.bidirectionnelle ? "Bidirectionnel" : "Unidirectionnel"}
+            valeur={
+              <span style={stylePastille(contrat.bidirectionnelle ? "accent" : "attention")}>
+                {contrat.bidirectionnelle ? "Bidirectionnel" : "Unidirectionnel"}
+              </span>
+            }
           />
 
           {contrat.bidirectionnelle && (
-            <p
-              style={{
-                fontSize: tokens.police.sm,
-                color: tokens.couleur.statut.info,
-                background: tokens.couleur.fond,
-                borderRadius: tokens.rayon.md,
-                padding: tokens.espace.md,
-                margin: `${tokens.espace.md} 0 0`,
-              }}
-            >
-              Révision <strong>bidirectionnelle forcée</strong> : une clause de hausse seule est
-              réputée non écrite (§2.5), la baisse est donc appliquée même si l'acte ne la prévoyait
-              pas.
-            </p>
+            <div style={{ marginTop: espacements.md }}>
+              <Note>
+                Révision <strong>bidirectionnelle forcée</strong> : une clause de hausse seule est
+                réputée non écrite (§2.5), la baisse de l'indice est donc appliquée même si l'acte
+                ne la prévoyait pas.
+              </Note>
+            </div>
           )}
         </>
       )}

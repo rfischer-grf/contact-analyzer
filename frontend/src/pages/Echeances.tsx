@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { apiClient } from "../api/client";
+import { api } from "../api/client";
+import type { TableauDeBord } from "../api/types";
 import { couleurs, espacements, rayons, typo } from "../theme/tokens";
 import {
   Bandeau,
@@ -14,37 +15,17 @@ import { formaterDateIso, formaterMontant, formaterNombre } from "../components/
 /**
  * Échéancier + abonnement ICS (#81, réécriture du stub ; spec §2.6).
  *
- * Source = GET /tableau-de-bord (état effectif, tenant via RLS). La date
+ * Source = api.tableauDeBord.get() (état effectif, tenant via RLS). La date
  * actionnable est la DATE LIMITE DE DÉNONCIATION = échéance − préavis (calculée
  * en aval, jamais extraite — §3), critique en tacite reconduction. Tableau trié
- * par urgence (jours restants croissants).
+ * par urgence (jours restants croissants — déjà ordonné côté API).
  *
- * « S'abonner au calendrier » → POST /ics/abonnement → URL capability (token
+ * « S'abonner au calendrier » → api.ics.abonnement() → URL capability (token
  * bearer long, aléatoire, révocable/rotatable). Le feed ne contient que dates +
  * intitulés, JAMAIS le contenu des clauses (garde-fou §2.6). L'alerte fiable
  * reste le job quotidien loggé côté serveur — l'ICS n'est que de la visibilité
  * (pas de VALARM).
  */
-
-interface ProchaineEcheance {
-  id: string;
-  reference: string | null;
-  date_limite_denonciation: string;
-  jours_restants: number;
-}
-
-interface TableauDeBord {
-  nb_contrats: number;
-  par_indice: Record<string, number>;
-  montant_total: number;
-  alertes: Record<string, number>; // clé = palier (« 7 », « 30 », …)
-  prochaines_echeances: ProchaineEcheance[];
-}
-
-interface AbonnementResponse {
-  id: string;
-  url: string;
-}
 
 // Ordre d'affichage des paliers d'alerte (spec §2.6 : J−90 / J−60 / J−30 / J−7).
 const PALIERS = [90, 60, 30, 7] as const;
@@ -63,7 +44,7 @@ export function Echeances(): JSX.Element {
     let actif = true;
     void (async () => {
       try {
-        const reponse = await apiClient.get<TableauDeBord>("/tableau-de-bord");
+        const reponse = await api.tableauDeBord.get();
         if (actif) setTdb(reponse);
       } catch (e) {
         if (actif) {
@@ -85,7 +66,7 @@ export function Echeances(): JSX.Element {
     setInfoIcs(null);
     setCopie(false);
     try {
-      const reponse = await apiClient.post<AbonnementResponse>("/ics/abonnement");
+      const reponse = await api.ics.abonnement();
       // L'API renvoie une URL relative (/ics/{token}.ics) ; on l'affiche en
       // absolu pour l'abonnement « calendrier par internet » dans Outlook.
       const base = import.meta.env.VITE_API_URL ?? window.location.origin;
@@ -233,7 +214,7 @@ export function Echeances(): JSX.Element {
                         fontWeight: typo.graisse.moyenne,
                       }}
                     >
-                      {e.reference ?? e.id.slice(0, 8)}
+                      {e.reference || e.id.slice(0, 8)}
                     </a>
                   </td>
                   <td style={{ ...cellule, fontWeight: typo.graisse.semi }}>

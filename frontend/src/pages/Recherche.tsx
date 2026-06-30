@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { apiClient } from "../api/client";
+import { api } from "../api/client";
+import type { ResultatSemantique } from "../api/types";
 import { couleurs, espacements, rayons, typo } from "../theme/tokens";
 import {
   Bandeau,
@@ -14,7 +15,7 @@ import {
 /**
  * Recherche sémantique (#80, spec §6).
  *
- * Champ texte en langage naturel → GET /recherche/semantique?q=&k= (vectoriel,
+ * Champ texte en langage naturel → api.recherche.semantique() (vectoriel,
  * Weaviate ; tenant injecté côté API, jamais fourni par le client — §6/§7).
  * On affiche les chunks de clause retournés (type + texte + lien vers le contrat).
  *
@@ -23,13 +24,6 @@ import {
  *    = SQL `WHERE` sur Postgres → vit dans la page Contrats ;
  *  - recherche SÉMANTIQUE (sens du corps des clauses, RAG) = vectoriel → ici.
  */
-
-interface ChunkResultat {
-  contrat_id: string;
-  type_clause: string;
-  texte: string;
-  metadata: Record<string, unknown>;
-}
 
 const LIBELLES_CLAUSE: Record<string, string> = {
   indexation: "Indexation",
@@ -49,14 +43,14 @@ function libelleClause(type: string): string {
 function metadataAffichables(metadata: Record<string, unknown>): [string, string][] {
   return Object.entries(metadata)
     .filter(([, v]) => v !== null && v !== undefined && v !== "")
-    .map(([k, v]) => [k, String(v)]);
+    .map(([k, v]) => [k, String(v)] as [string, string]);
 }
 
 const NB_RESULTATS = 8;
 
 export function Recherche(): JSX.Element {
   const [requete, setRequete] = useState("");
-  const [resultats, setResultats] = useState<ChunkResultat[] | null>(null);
+  const [resultats, setResultats] = useState<ResultatSemantique[] | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -66,9 +60,7 @@ export function Recherche(): JSX.Element {
     setEnCours(true);
     setErreur(null);
     try {
-      const chunks = await apiClient.get<ChunkResultat[]>(
-        `/recherche/semantique?q=${encodeURIComponent(q)}&k=${NB_RESULTATS}`,
-      );
+      const chunks = await api.recherche.semantique(q, NB_RESULTATS);
       setResultats(chunks);
     } catch (e) {
       setErreur(`Échec de la recherche : ${e instanceof Error ? e.message : String(e)}`);
@@ -146,7 +138,7 @@ export function Recherche(): JSX.Element {
   );
 }
 
-function ResultatChunk({ chunk }: { chunk: ChunkResultat }): JSX.Element {
+function ResultatChunk({ chunk }: { chunk: ResultatSemantique }): JSX.Element {
   const meta = metadataAffichables(chunk.metadata);
   return (
     <Carte>
