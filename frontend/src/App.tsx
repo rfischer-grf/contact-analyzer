@@ -1,61 +1,64 @@
-import { useState } from "react";
-import { getTenant, getUtilisateur, logout } from "./auth/keycloak";
+/**
+ * Coquille applicative (shell) du cockpit Clausio — tickets #72/#73/#74.
+ *
+ * Routage `react-router-dom` : toutes les routes sont protégées par `AuthProvider`
+ * + `RouteProtegee`, et rendues dans `AppLayout` (sidebar + en-tête tenant + zone
+ * de contenu). Les pages métier sont écrites par d'autres agents ; on les importe
+ * par chemin (`pages/…`) et on câble les routes de l'epic #88.
+ */
+import { Suspense } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, RouteProtegee } from "./auth/AuthContext";
+import { AppLayout } from "./components/layout/AppLayout";
+import { tokens } from "./theme";
+
+// Pages métier (propriété d'autres agents — importées par chemin).
+import { Dashboard } from "./pages/Dashboard";
+import { Contrats } from "./pages/Contrats";
+import { ContratDetail } from "./pages/ContratDetail";
 import { Upload } from "./pages/Upload";
 import { Validation } from "./pages/Validation";
+import { Projection } from "./pages/Projection";
+import { Recherche } from "./pages/Recherche";
 import { Echeances } from "./pages/Echeances";
 
-type Onglet = "upload" | "validation" | "echeances";
-
-const ONGLETS: { cle: Onglet; libelle: string }[] = [
-  { cle: "upload", libelle: "Déposer un contrat" },
-  { cle: "validation", libelle: "Validation (HITL)" },
-  { cle: "echeances", libelle: "Échéances" },
-];
-
-/**
- * Coquille applicative (scaffold #69). Navigation par onglets minimale ;
- * un vrai routeur (react-router) sera ajouté au besoin dans un ticket dédié.
- */
-export function App(): JSX.Element {
-  const [onglet, setOnglet] = useState<Onglet>("upload");
-
+/** Repli affiché pendant le chargement d'une page (Suspense). */
+function Chargement(): JSX.Element {
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", maxWidth: 1000, margin: "0 auto", padding: 16 }}>
-      <header style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <h1 style={{ fontSize: 20 }}>Contract Intelligence — CLM souverain</h1>
-        <span style={{ fontSize: 13, color: "#555" }}>
-          {getUtilisateur()} · tenant&nbsp;<strong>{getTenant() ?? "—"}</strong>{" "}
-          <button onClick={logout} style={{ marginLeft: 8 }}>
-            Se déconnecter
-          </button>
-        </span>
-      </header>
+    <p style={{ padding: tokens.espacements.xl, color: tokens.couleurs.texteAttenue }}>
+      Chargement…
+    </p>
+  );
+}
 
-      <nav style={{ display: "flex", gap: 8, borderBottom: "1px solid #ddd", margin: "12px 0" }}>
-        {ONGLETS.map(({ cle, libelle }) => (
-          <button
-            key={cle}
-            onClick={() => setOnglet(cle)}
-            aria-current={onglet === cle}
-            style={{
-              border: "none",
-              borderBottom: onglet === cle ? "2px solid #2557d6" : "2px solid transparent",
-              background: "none",
-              padding: "6px 10px",
-              fontWeight: onglet === cle ? 600 : 400,
-              cursor: "pointer",
-            }}
-          >
-            {libelle}
-          </button>
-        ))}
-      </nav>
+/** Route inconnue → renvoi au tableau de bord. */
+function Inconnue(): JSX.Element {
+  return <Navigate to="/" replace />;
+}
 
-      <main>
-        {onglet === "upload" && <Upload />}
-        {onglet === "validation" && <Validation />}
-        {onglet === "echeances" && <Echeances />}
-      </main>
-    </div>
+export function App(): JSX.Element {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <RouteProtegee>
+          <Suspense fallback={<Chargement />}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/contrats" element={<Contrats />} />
+                <Route path="/contrats/:id" element={<ContratDetail />} />
+                <Route path="/upload" element={<Upload />} />
+                <Route path="/validation" element={<Validation />} />
+                <Route path="/validation/:id" element={<Validation />} />
+                <Route path="/projection/:id" element={<Projection />} />
+                <Route path="/recherche" element={<Recherche />} />
+                <Route path="/echeances" element={<Echeances />} />
+                <Route path="*" element={<Inconnue />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </RouteProtegee>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

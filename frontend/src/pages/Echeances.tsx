@@ -1,81 +1,59 @@
 import { useEffect, useState } from "react";
-import { apiClient } from "../api/client";
+import { api } from "../api/client";
+import type { TableauDeBord } from "../api/types";
+import { couleurs, espacements, rayons, typo } from "../theme/tokens";
+import {
+  Bandeau,
+  Bouton,
+  Carte,
+  EntetePage,
+  Note,
+} from "../components/analyse/primitives";
+import { BadgeUrgence, couleurPalier } from "../components/analyse/BadgeUrgence";
+import { formaterDateIso, formaterMontant, formaterNombre } from "../components/analyse/format";
 
 /**
- * Tableau de bord des échéances + abonnement ICS (ticket #57, spec §2.6).
+ * Échéancier + abonnement ICS (#81, réécriture du stub ; spec §2.6).
  *
- * - Liste les échéances et surtout la DATE LIMITE DE DÉNONCIATION = échéance −
- *   préavis (date actionnable, critique en tacite reconduction ; calculée en aval,
- *   jamais extraite — spec §3).
- * - « S'abonner au calendrier » → POST /ics/abonnement → renvoie une URL capability
- *   (token bearer long, révocable) à coller dans Outlook. Le feed ne contient que
- *   dates + intitulé, jamais le contenu des clauses (garde-fou §2.6).
+ * Source = api.tableauDeBord.get() (état effectif, tenant via RLS). La date
+ * actionnable est la DATE LIMITE DE DÉNONCIATION = échéance − préavis (calculée
+ * en aval, jamais extraite — §3), critique en tacite reconduction. Tableau trié
+ * par urgence (jours restants croissants — déjà ordonné côté API).
+ *
+ * « S'abonner au calendrier » → api.ics.abonnement() → URL capability (token
+ * bearer long, aléatoire, révocable/rotatable). Le feed ne contient que dates +
+ * intitulés, JAMAIS le contenu des clauses (garde-fou §2.6). L'alerte fiable
+ * reste le job quotidien loggé côté serveur — l'ICS n'est que de la visibilité
+ * (pas de VALARM).
  */
 
-interface LigneEcheance {
-  contrat_id: string;
-  fournisseur: string;
-  date_echeance: string;
-  date_limite_denonciation: string;
-  tacite_reconduction: boolean;
-  jours_restants: number;
-}
-
-interface AbonnementResponse {
-  id: string;
-  url: string;
-}
-
-// Données d'exemple tant que l'endpoint de liste (recherche par facette #52) n'expose
-// pas les échéances ; remplacées dès que l'API renvoie l'état effectif filtré.
-const EXEMPLE: LigneEcheance[] = [
-  {
-    contrat_id: "demo-1",
-    fournisseur: "ACME Cloud SAS",
-    date_echeance: "2026-09-30",
-    date_limite_denonciation: "2026-06-30",
-    tacite_reconduction: true,
-    jours_restants: 0,
-  },
-  {
-    contrat_id: "demo-2",
-    fournisseur: "Réseaux & Liens SARL",
-    date_echeance: "2026-12-31",
-    date_limite_denonciation: "2026-10-02",
-    tacite_reconduction: true,
-    jours_restants: 94,
-  },
-];
-
-const PALIERS_ALERTE = [90, 60, 30, 7];
-
-/** Couleur indicative selon proximité des paliers d'alerte (spec §2.6). */
-function couleurPalier(jours: number): string {
-  if (jours <= 7) return "#b00";
-  if (jours <= 30) return "#d97706";
-  if (jours <= 90) return "#ca8a04";
-  return "#2a7";
-}
+// Ordre d'affichage des paliers d'alerte (spec §2.6 : J−90 / J−60 / J−30 / J−7).
+const PALIERS = [90, 60, 30, 7] as const;
 
 export function Echeances(): JSX.Element {
-  const [lignes, setLignes] = useState<LigneEcheance[]>([]);
+  const [tdb, setTdb] = useState<TableauDeBord | null>(null);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+
   const [urlIcs, setUrlIcs] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [abonnementEnCours, setAbonnementEnCours] = useState(false);
+  const [infoIcs, setInfoIcs] = useState<string | null>(null);
+  const [copie, setCopie] = useState(false);
 
   useEffect(() => {
     let actif = true;
     void (async () => {
       try {
-        const reponse = await apiClient.get<LigneEcheance[]>("/recherche/facette?type=echeances");
-        if (actif && reponse.length > 0) {
-          setLignes(reponse);
-          return;
-        }
+        const reponse = await api.tableauDeBord.get();
+        if (actif) setTdb(reponse);
       } catch (e) {
-        console.warn("Liste d'échéances indisponible (#52 non implémenté) ; exemple.", e);
-      }
-      if (actif) {
-        setLignes(EXEMPLE);
+        if (actif) {
+          setErreur(
+            `Tableau de bord indisponible : ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } finally {
+        if (actif) setChargement(false);
       }
     })();
     return () => {
@@ -84,60 +62,230 @@ export function Echeances(): JSX.Element {
   }, []);
 
   async function abonner(): Promise<void> {
+    setAbonnementEnCours(true);
+    setInfoIcs(null);
+    setCopie(false);
     try {
-      const reponse = await apiClient.post<AbonnementResponse>("/ics/abonnement");
-      // L'URL renvoyée est relative à l'API ; on l'affiche en absolu pour Outlook.
+      const reponse = await api.ics.abonnement();
+      // L'API renvoie une URL relative (/ics/{token}.ics) ; on l'affiche en
+      // absolu pour l'abonnement « calendrier par internet » dans Outlook.
       const base = import.meta.env.VITE_API_URL ?? window.location.origin;
       setUrlIcs(`${base}${reponse.url}`);
-      setInfo("Abonnement créé. Copier l'URL ci-dessous dans Outlook (calendrier par internet).");
+      setInfoIcs(
+        "Abonnement créé. Collez l'URL ci-dessous dans Outlook (« Ajouter un calendrier » → « À partir d'Internet »).",
+      );
     } catch (e) {
-      setInfo(`Échec de l'abonnement : ${e instanceof Error ? e.message : String(e)}`);
+      setInfoIcs(`Échec de l'abonnement : ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setAbonnementEnCours(false);
     }
   }
 
+  async function copier(): Promise<void> {
+    if (!urlIcs) return;
+    try {
+      await navigator.clipboard.writeText(urlIcs);
+      setCopie(true);
+      window.setTimeout(() => setCopie(false), 2000);
+    } catch {
+      // Presse-papiers indisponible (contexte non sécurisé) : l'utilisateur copie à la main.
+      setCopie(false);
+    }
+  }
+
+  const echeances = tdb?.prochaines_echeances ?? [];
+
   return (
     <section>
-      <h2>Échéances & dates limites de dénonciation</h2>
-      <p style={{ color: "#555", fontSize: 14 }}>
+      <EntetePage titre="Échéances & dates limites de dénonciation">
         La date actionnable est la <strong>date limite de dénonciation</strong> (échéance −
-        préavis), pas l'échéance. Alertes envoyées à J−{PALIERS_ALERTE.join(", J−")}.
-      </p>
+        préavis), pas l'échéance elle-même — critique en tacite reconduction. Les alertes mail +
+        in-app partent à J−{PALIERS.join(", J−")} via un job quotidien loggé.
+      </EntetePage>
 
-      <div style={{ margin: "12px 0" }}>
-        <button onClick={() => void abonner()}>S'abonner au calendrier (.ics)</button>
-        {info && <p style={{ fontSize: 13 }}>{info}</p>}
-        {urlIcs && (
-          <p style={{ fontSize: 13 }}>
-            URL d'abonnement :{" "}
-            <code style={{ wordBreak: "break-all" }}>{urlIcs}</code>
-          </p>
+      {erreur && <Bandeau ton="danger">{erreur}</Bandeau>}
+
+      {tdb && <BandeauAlertes alertes={tdb.alertes} />}
+
+      <Carte style={{ margin: `${espacements.xl} 0` }}>
+        <h3
+          style={{
+            fontSize: typo.taille.md,
+            fontWeight: typo.graisse.semi,
+            color: couleurs.texte,
+            margin: `0 0 ${espacements.xs}`,
+          }}
+        >
+          Abonnement calendrier (.ics)
+        </h3>
+        <p
+          style={{
+            fontSize: typo.taille.sm,
+            color: couleurs.texteAttenue,
+            margin: `0 0 ${espacements.md}`,
+          }}
+        >
+          Un VEVENT par échéance / date limite de dénonciation / date de révision, en lecture seule
+          dans votre agenda. Visibilité uniquement : l'alerte fiable reste le job quotidien.
+        </p>
+
+        <Bouton onClick={() => void abonner()} disabled={abonnementEnCours}>
+          {abonnementEnCours ? "Création…" : "S'abonner au calendrier"}
+        </Bouton>
+
+        {infoIcs && (
+          <div style={{ marginTop: espacements.md }}>
+            <Bandeau ton={urlIcs ? "succes" : "danger"}>{infoIcs}</Bandeau>
+          </div>
         )}
-      </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-            <th style={{ padding: 6 }}>Fournisseur</th>
-            <th style={{ padding: 6 }}>Échéance</th>
-            <th style={{ padding: 6 }}>Date limite de dénonciation</th>
-            <th style={{ padding: 6 }}>Tacite recond.</th>
-            <th style={{ padding: 6 }}>Jours restants</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lignes.map((l) => (
-            <tr key={l.contrat_id} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: 6 }}>{l.fournisseur}</td>
-              <td style={{ padding: 6 }}>{l.date_echeance}</td>
-              <td style={{ padding: 6, fontWeight: 600 }}>{l.date_limite_denonciation}</td>
-              <td style={{ padding: 6 }}>{l.tacite_reconduction ? "oui" : "non"}</td>
-              <td style={{ padding: 6, color: couleurPalier(l.jours_restants) }}>
-                {l.jours_restants}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        {urlIcs && (
+          <div style={{ marginTop: espacements.md }}>
+            <div style={{ display: "flex", gap: espacements.sm, alignItems: "center" }}>
+              <code
+                style={{
+                  flex: 1,
+                  fontFamily: typo.familleMono,
+                  fontSize: typo.taille.xs,
+                  background: couleurs.surfaceAlt,
+                  border: `1px solid ${couleurs.bordure}`,
+                  borderRadius: rayons.sm,
+                  padding: espacements.sm,
+                  wordBreak: "break-all",
+                }}
+              >
+                {urlIcs}
+              </code>
+              <Bouton variante="secondaire" onClick={() => void copier()}>
+                {copie ? "Copié ✓" : "Copier"}
+              </Bouton>
+            </div>
+            <div style={{ marginTop: espacements.md }}>
+              <Note>
+                Cette URL est une <strong>capability</strong> (jeton bearer aléatoire, long) :
+                quiconque la détient lit le feed. Elle est <strong>révocable et rotatable</strong>{" "}
+                à tout moment, et ne contient que des <strong>dates + intitulés</strong>, jamais le
+                contenu des clauses.
+              </Note>
+            </div>
+          </div>
+        )}
+      </Carte>
+
+      <h3
+        style={{
+          fontSize: typo.taille.md,
+          fontWeight: typo.graisse.semi,
+          color: couleurs.texte,
+          margin: `0 0 ${espacements.md}`,
+        }}
+      >
+        Prochaines échéances{tdb ? ` (${tdb.nb_contrats} contrat(s) au total)` : ""}
+      </h3>
+
+      {chargement && (
+        <p style={{ fontSize: typo.taille.base, color: couleurs.texteAttenue }}>Chargement…</p>
+      )}
+
+      {!chargement && echeances.length === 0 && !erreur && (
+        <Bandeau ton="info">Aucune échéance dans les 120 prochains jours.</Bandeau>
+      )}
+
+      {echeances.length > 0 && (
+        <Carte style={{ padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: typo.taille.base }}>
+            <thead>
+              <tr style={{ background: couleurs.surfaceAlt, textAlign: "left" }}>
+                <th style={enteteCellule}>Contrat</th>
+                <th style={enteteCellule}>Date limite de dénonciation</th>
+                <th style={enteteCellule}>Urgence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {echeances.map((e) => (
+                <tr key={e.id} style={{ borderTop: `1px solid ${couleurs.bordure}` }}>
+                  <td style={cellule}>
+                    {/* Pas de routeur (shell par onglets #69) ; lien partageable et dégradable. */}
+                    <a
+                      href={`/contrats/${encodeURIComponent(e.id)}`}
+                      style={{
+                        color: couleurs.accent,
+                        textDecoration: "none",
+                        fontWeight: typo.graisse.moyenne,
+                      }}
+                    >
+                      {e.reference || e.id.slice(0, 8)}
+                    </a>
+                  </td>
+                  <td style={{ ...cellule, fontWeight: typo.graisse.semi }}>
+                    {formaterDateIso(e.date_limite_denonciation)}
+                  </td>
+                  <td style={cellule}>
+                    <BadgeUrgence jours={e.jours_restants} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Carte>
+      )}
+
+      {tdb && tdb.montant_total > 0 && (
+        <p
+          style={{
+            fontSize: typo.taille.sm,
+            color: couleurs.texteAttenue,
+            marginTop: espacements.lg,
+          }}
+        >
+          Engagement total sous gestion : {formaterMontant(tdb.montant_total)}.
+        </p>
+      )}
     </section>
   );
 }
+
+/** Récapitulatif des paliers d'alerte (compte de contrats par échéance proche). */
+function BandeauAlertes({ alertes }: { alertes: Record<string, number> }): JSX.Element {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+        gap: espacements.md,
+      }}
+    >
+      {PALIERS.map((palier) => {
+        const compte = alertes[String(palier)] ?? 0;
+        const couleur = couleurPalier(palier);
+        return (
+          <Carte key={palier} style={{ padding: espacements.lg, textAlign: "center" }}>
+            <div
+              style={{ fontSize: typo.taille.xs, color: couleurs.texteAttenue, marginBottom: espacements.xs }}
+            >
+              À J−{palier}
+            </div>
+            <div style={{ fontSize: typo.taille.xxl, fontWeight: typo.graisse.forte, color: couleur }}>
+              {formaterNombre(compte, 0)}
+            </div>
+            <div style={{ fontSize: typo.taille.xs, color: couleurs.texteFaible }}>
+              contrat(s)
+            </div>
+          </Carte>
+        );
+      })}
+    </div>
+  );
+}
+
+const enteteCellule = {
+  padding: `${espacements.md} ${espacements.lg}`,
+  fontSize: typo.taille.sm,
+  fontWeight: typo.graisse.semi,
+  color: couleurs.texteAttenue,
+} as const;
+
+const cellule = {
+  padding: `${espacements.md} ${espacements.lg}`,
+  color: couleurs.texte,
+} as const;

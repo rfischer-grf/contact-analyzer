@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # --- Application ---
     app_name: str = "Contract Intelligence (CLM souverain)"
     environment: str = "dev"
+    # Origines autorisées pour le front (CORS) — SPA Vite en dev.
+    cors_origins: list[str] = ["http://localhost:5173"]
 
     # --- Base de données (PostgreSQL, source de vérité unique) ---
     database_url: str = "postgresql+psycopg://clm:clm@localhost:5432/clm"

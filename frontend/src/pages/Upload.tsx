@@ -1,44 +1,40 @@
 import { useEffect, useRef, useState } from "react";
-import { apiClient, putVersS3 } from "../api/client";
+import { api } from "../api/client";
+import type { EtatIngestion } from "../api/types";
+import { tokens } from "../theme";
+import { DepotFichier } from "../components/ingestion/DepotFichier";
+import { SuiviStatut } from "../components/ingestion/SuiviStatut";
 
 /**
- * Dépôt d'un contrat + suivi de statut (ticket #55).
+ * Dépôt d'un contrat fournisseur + suivi de la saga d'ingestion (#77, spec §2.1 / §4).
  *
- * Flux (spec §2.1) :
- *   1. calcul du SHA256 du fichier côté navigateur (clé canonique, idempotence) ;
- *   2. POST /uploads/presign → URL présignée (le tenant/bucket sont dérivés du token) ;
- *   3. PUT direct navigateur → S3 (Garage) : les octets NE transitent PAS par l'API ;
- *   4. POST /uploads/confirm → l'API fait un HEAD puis démarre le workflow Temporal ;
- *   5. polling GET /statut/{workflow_id} pour suivre la saga d'ingestion.
+ * Flux :
+ *   1. SHA256 du fichier côté navigateur (clé canonique, idempotence) — WebCrypto.
+ *   2. api.uploads.presign({sha256, content_type}) → URL présignée S3.
+ *      (bucket/préfixe dérivés du token côté API ; jamais fournis par le client.)
+ *   3. PUT direct navigateur → S3 (Garage), sans bearer, Content-Type = content_type.
+ *      Les octets NE transitent JAMAIS par l'API (garde-fou §2.1).
+ *   4. api.uploads.confirm({sha256}) → l'API fait un HEAD puis démarre le workflow Temporal.
+ *   5. Polling api.statut.get(workflowId) → progression jusqu'à un état terminal.
+ *
+ * Tout le style passe par les tokens du thème (`../theme`).
  */
 
-interface PresignResponse {
-  url: string;
-  methode: string;
-  cle: string;
-  bucket: string;
-  expire_dans: number;
-}
+/** États terminaux de la saga (spec §4) : on arrête le polling. */
+const ETATS_TERMINAUX: ReadonlySet<string> = new Set([
+  "COMMITE",
+  "REJETE_TECHNIQUE",
+  "REJETE_METIER",
+]);
 
-interface ConfirmResponse {
-  cle: string;
-  etat: string;
-}
+const INTERVALLE_POLLING_MS = 3000;
 
-interface StatutResponse {
-  workflow_id: string;
-  statut: string;
-}
-
-// États de la saga (spec §4) jusqu'à un état terminal.
-const ETATS_TERMINAUX = new Set(["COMMITE", "VALIDE", "REJETE_TECHNIQUE", "REJETE_METIER"]);
-
-/** SHA256 hex du fichier via WebCrypto (aucune dépendance). */
+/** SHA256 hex du fichier via WebCrypto (aucune dépendance externe). */
 async function sha256Hex(fichier: File): Promise<string> {
   const buffer = await fichier.arrayBuffer();
   const digest = await crypto.subtle.digest("SHA-256", buffer);
   return Array.from(new Uint8Array(digest))
-    .map((o) => o.toString(16).padStart(2, "0"))
+    .map((octet) => octet.toString(16).padStart(2, "0"))
     .join("");
 }
 
@@ -48,47 +44,47 @@ export function Upload(): JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [workflowId, setWorkflowId] = useState<string | null>(null);
-  const [statut, setStatut] = useState<string | null>(null);
+  const [statut, setStatut] = useState<EtatIngestion | null>(null);
 
-  // Référence d'intervalle de polling, nettoyée au démontage.
+  // Référence de l'intervalle de polling, nettoyée au démontage / au redémarrage.
   const pollRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current !== null) {
-        window.clearInterval(pollRef.current);
-      }
-    };
-  }, []);
-
-  function demarrerPolling(id: string): void {
+  function arreterPolling(): void {
     if (pollRef.current !== null) {
       window.clearInterval(pollRef.current);
+      pollRef.current = null;
     }
-    pollRef.current = window.setInterval(async () => {
-      try {
-        const reponse = await apiClient.get<StatutResponse>(`/statut/${encodeURIComponent(id)}`);
-        setStatut(reponse.statut);
-        if (ETATS_TERMINAUX.has(reponse.statut) && pollRef.current !== null) {
-          window.clearInterval(pollRef.current);
-          pollRef.current = null;
+  }
+
+  useEffect(() => arreterPolling, []);
+
+  function demarrerPolling(id: string): void {
+    arreterPolling();
+    pollRef.current = window.setInterval(() => {
+      void (async () => {
+        try {
+          const reponse = await api.statut.get(id);
+          setStatut(reponse.statut);
+          if (ETATS_TERMINAUX.has(reponse.statut)) {
+            arreterPolling();
+          }
+        } catch (e) {
+          // Le workflow peut ne pas être interrogeable immédiatement (404) ; on
+          // log et on réessaie au prochain tick plutôt que d'arrêter le suivi.
+          console.warn("Statut indisponible, nouvelle tentative…", e);
         }
-      } catch (e) {
-        // Le workflow peut ne pas être interrogeable immédiatement ; on log et on réessaie.
-        console.warn("Statut indisponible, nouvelle tentative…", e);
-      }
-    }, 3000);
+      })();
+    }, INTERVALLE_POLLING_MS);
   }
 
   async function deposer(): Promise<void> {
-    if (!fichier) {
-      return;
-    }
+    if (!fichier) return;
     setEnCours(true);
     setErreur(null);
     setMessage(null);
     setStatut(null);
     setWorkflowId(null);
+    arreterPolling();
 
     try {
       const contentType = fichier.type || "application/pdf";
@@ -97,26 +93,32 @@ export function Upload(): JSX.Element {
       const sha256 = await sha256Hex(fichier);
 
       setMessage("Demande d'URL présignée…");
-      const presign = await apiClient.post<PresignResponse>("/uploads/presign", {
-        sha256,
-        content_type: contentType,
-      });
+      const presign = await api.uploads.presign({ sha256, content_type: contentType });
 
-      setMessage("Envoi direct vers le stockage S3…");
-      await putVersS3(presign.url, fichier, contentType);
+      setMessage("Envoi direct vers le stockage souverain (S3/Garage)…");
+      // PUT brut, sans bearer : l'URL signée porte déjà l'autorisation (§2.1).
+      const reponseS3 = await fetch(presign.url, {
+        method: presign.methode,
+        headers: { "Content-Type": contentType },
+        body: fichier,
+      });
+      if (!reponseS3.ok) {
+        throw new Error(`Échec de l'envoi S3 (HTTP ${reponseS3.status}).`);
+      }
 
       setMessage("Confirmation de l'upload…");
-      const confirm = await apiClient.post<ConfirmResponse>("/uploads/confirm", { sha256 });
+      const confirm = await api.uploads.confirm({ sha256 });
 
-      // Le workflow Temporal est idempotent sur le SHA256 (spec §2.1) ;
-      // on s'aligne sur cette convention pour le workflow_id de suivi.
+      // Le workflow Temporal est idempotent sur le SHA256 (spec §2.1) ; tant que
+      // l'API ne renvoie pas explicitement le workflow_id, on s'aligne sur cette
+      // convention. TODO(#16/#22) : utiliser le workflow_id renvoyé par /confirm.
       const id = sha256;
       setWorkflowId(id);
       setStatut(confirm.etat);
-      setMessage(`Upload confirmé (clé ${confirm.cle}). Suivi de l'ingestion…`);
+      setMessage(`Upload confirmé (clé ${confirm.cle}). Suivi de l'ingestion en cours…`);
       demarrerPolling(id);
     } catch (e) {
-      setErreur(String(e instanceof Error ? e.message : e));
+      setErreur(e instanceof Error ? e.message : String(e));
     } finally {
       setEnCours(false);
     }
@@ -124,38 +126,138 @@ export function Upload(): JSX.Element {
 
   return (
     <section>
-      <h2>Déposer un contrat fournisseur</h2>
-      <p style={{ color: "#555", fontSize: 14 }}>
-        Le fichier part directement vers le stockage souverain (S3/Garage) via une URL présignée.
-        Les octets ne transitent jamais par l'API.
+      <h2 style={{ fontSize: tokens.police.xl, color: tokens.couleur.texte, marginTop: 0 }}>
+        Déposer un contrat fournisseur
+      </h2>
+      <p style={{ color: tokens.couleur.texteAttenue, fontSize: tokens.police.sm }}>
+        Le fichier part directement vers le stockage souverain (S3/Garage) via une URL
+        présignée. Les octets ne transitent jamais par l'API. La clé canonique est le
+        SHA256 du fichier (dédoublonnage et idempotence).
       </p>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "12px 0" }}>
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => setFichier(e.target.files?.[0] ?? null)}
-          disabled={enCours}
-        />
-        <button onClick={() => void deposer()} disabled={!fichier || enCours}>
-          {enCours ? "En cours…" : "Déposer"}
-        </button>
-      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: tokens.espace.xl, alignItems: "start" }}>
+        <div>
+          <DepotFichier
+            fichier={fichier}
+            onSelection={setFichier}
+            onDeposer={() => void deposer()}
+            enCours={enCours}
+          />
 
-      {message && <p style={{ fontSize: 14 }}>{message}</p>}
-      {erreur && <p style={{ color: "#b00", fontSize: 14 }}>Erreur : {erreur}</p>}
-
-      {workflowId && (
-        <div style={{ marginTop: 16, padding: 12, border: "1px solid #ddd", borderRadius: 6 }}>
-          <div style={{ fontSize: 13, color: "#555" }}>Workflow : {workflowId}</div>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>Statut : {statut ?? "—"}</div>
-          {statut === "A_VALIDER" && (
-            <p style={{ fontSize: 14 }}>
-              Prêt pour la validation humaine : rendez-vous dans l'onglet « Validation (HITL) ».
+          {message && (
+            <p style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue, marginTop: tokens.espace.md }}>
+              {message}
+            </p>
+          )}
+          {erreur && (
+            <p
+              role="alert"
+              style={{
+                fontSize: tokens.police.sm,
+                color: tokens.couleur.danger,
+                background: tokens.couleur.dangerDoux,
+                padding: tokens.espace.sm,
+                borderRadius: tokens.rayon.md,
+                marginTop: tokens.espace.md,
+              }}
+            >
+              Erreur : {erreur}
             </p>
           )}
         </div>
-      )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: tokens.espace.md }}>
+          {workflowId ? (
+            <>
+              <div
+                style={{
+                  fontSize: tokens.police.xs,
+                  color: tokens.couleur.texteAttenue,
+                  wordBreak: "break-all",
+                }}
+              >
+                Workflow : <code>{workflowId}</code>
+              </div>
+              <SuiviStatut statut={statut} />
+              {statut === "A_VALIDER" && (
+                <p
+                  style={{
+                    fontSize: tokens.police.sm,
+                    color: tokens.couleur.accentFort,
+                    background: tokens.couleur.accentDoux,
+                    padding: tokens.espace.sm,
+                    borderRadius: tokens.rayon.md,
+                  }}
+                >
+                  Prêt pour la validation humaine : voir l'onglet « Validation (HITL) ».
+                </p>
+              )}
+            </>
+          ) : (
+            <SuiviChamp
+              onSuivre={(id) => {
+                setWorkflowId(id);
+                setStatut(null);
+                demarrerPolling(id);
+              }}
+            />
+          )}
+        </div>
+      </div>
     </section>
+  );
+}
+
+/**
+ * Saisie manuelle d'un workflow_id à suivre (filet de sécurité tant que
+ * l'API ne renvoie pas explicitement le workflow_id — TODO #16/#22).
+ */
+function SuiviChamp({ onSuivre }: { onSuivre: (id: string) => void }): JSX.Element {
+  const [valeur, setValeur] = useState("");
+  return (
+    <div
+      style={{
+        border: `1px solid ${tokens.couleur.bordure}`,
+        borderRadius: tokens.rayon.md,
+        padding: tokens.espace.md,
+        background: tokens.couleur.fondCarte,
+      }}
+    >
+      <div style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue, marginBottom: tokens.espace.sm }}>
+        Suivre une ingestion existante (workflow_id) :
+      </div>
+      <div style={{ display: "flex", gap: tokens.espace.sm }}>
+        <input
+          value={valeur}
+          onChange={(e) => setValeur(e.target.value)}
+          placeholder="SHA256 / workflow_id"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            border: `1px solid ${tokens.couleur.bordure}`,
+            borderRadius: tokens.rayon.md,
+            padding: tokens.espace.sm,
+            fontSize: tokens.police.sm,
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => valeur.trim() && onSuivre(valeur.trim())}
+          disabled={!valeur.trim()}
+          style={{
+            background: tokens.couleur.accent,
+            color: tokens.couleur.texteInverse,
+            border: "none",
+            borderRadius: tokens.rayon.md,
+            padding: `${tokens.espace.sm} ${tokens.espace.md}`,
+            fontSize: tokens.police.sm,
+            cursor: valeur.trim() ? "pointer" : "not-allowed",
+            opacity: valeur.trim() ? 1 : 0.6,
+          }}
+        >
+          Suivre
+        </button>
+      </div>
+    </div>
   );
 }

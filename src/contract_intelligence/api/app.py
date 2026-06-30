@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import get_settings
-from .routers import health, hitl, ics, recherche, statut, uploads
+from .routers import (
+    contrats,
+    health,
+    hitl,
+    ics,
+    recherche,
+    statut,
+    tableau_de_bord,
+    uploads,
+)
 
 
 def create_app() -> FastAPI:
@@ -15,8 +25,17 @@ def create_app() -> FastAPI:
         version="0.1.0",
         summary="Plateforme souveraine de gestion intelligente des contrats fournisseurs.",
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health.router)
     app.include_router(uploads.router)
+    app.include_router(contrats.router)
+    app.include_router(tableau_de_bord.router)
     app.include_router(hitl.router)
     app.include_router(recherche.router)
     app.include_router(statut.router)
