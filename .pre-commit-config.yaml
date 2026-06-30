@@ -1,0 +1,23 @@
+# Hooks pre-commit (#6) : format + lint + garde-fous secrets/fichiers.
+# Installation : `uv pip install pre-commit && pre-commit install`.
+# Les mêmes vérifications tournent en CI (.github/workflows/ci.yml) ; ces hooks
+# les rejouent en local pour échouer tôt. Aucun secret en clair (garde-fou §7).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff           # lint (E/F/I/UP/B), auto-fix
+        args: [--fix]
+      - id: ruff-format    # format (line-length 100)
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key   # refuse une clé privée commitée
