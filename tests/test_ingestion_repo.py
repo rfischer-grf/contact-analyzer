@@ -16,8 +16,10 @@ from contract_intelligence.db import Base, Contrat, Document, make_sessionmaker
 from contract_intelligence.db.ingestion_repo import (
     marquer_etat,
     persister_extraction,
+    rattacher_au_parent,
     rejeter_metier,
 )
+from contract_intelligence.db.models import EvenementAudit
 
 
 @pytest.fixture
@@ -164,3 +166,81 @@ def test_marquer_etat_contrat_introuvable_leve(factory) -> None:
 
     with factory() as s, pytest.raises(ValueError, match="introuvable"):
         marquer_etat(s, uuid.uuid4(), "COMMITE")
+
+
+def _pieces_parent_et_avenant(s):
+    """Crée un parent COMMITE (pièce d'origine) + un standalone A_VALIDER (avenant).
+
+    Renvoie `(parent_id, standalone_id, doc_avenant_id)`.
+    """
+    parent_id = persister_extraction(
+        s,
+        tenant="acme",
+        sha256="1" * 64,
+        cle_s3=f"acme/{'1' * 64}",
+        extraction=_extraction(),
+        date_signature=date(2023, 1, 1),
+    )
+    marquer_etat(s, parent_id, "COMMITE")
+    standalone_id = persister_extraction(
+        s,
+        tenant="acme",
+        sha256="2" * 64,
+        cle_s3=f"acme/{'2' * 64}",
+        extraction=_extraction(),
+        date_signature=date(2024, 6, 1),  # avenant signé après l'origine
+    )
+    doc_avenant = s.query(Document).filter(Document.contrat_id == standalone_id).one()
+    return parent_id, standalone_id, doc_avenant.id
+
+
+def test_rattacher_au_parent_deplace_le_document_et_supprime_orphelin(factory) -> None:
+    """#33 : à la confirmation HITL, l'avenant rejoint le parent et l'orphelin disparaît."""
+    with factory() as s:
+        parent_id, standalone_id, doc_avenant_id = _pieces_parent_et_avenant(s)
+        s.commit()
+
+    with factory() as s:
+        cible = rattacher_au_parent(s, contrat_id=standalone_id, parent_contrat_id=parent_id)
+        s.commit()
+
+    assert cible == parent_id
+    with factory() as s:
+        # Le contrat standalone (orphelin) a été supprimé.
+        assert s.get(Contrat, standalone_id) is None
+        # L'avenant pointe désormais le parent, avec un numéro d'avenant attribué.
+        doc = s.get(Document, doc_avenant_id)
+        assert doc.contrat_id == parent_id
+        assert doc.numero_avenant == 1
+        # Le parent porte bien ses deux pièces (origine + avenant).
+        assert s.query(Document).filter(Document.contrat_id == parent_id).count() == 2
+        # Traçabilité : un évènement de rattachement est consigné (§2).
+        audits = (
+            s.query(EvenementAudit)
+            .filter(EvenementAudit.type_evenement == "AVENANT_RATTACHE")
+            .all()
+        )
+        assert len(audits) == 1
+        assert audits[0].payload["contrat_absorbe"] == str(standalone_id)
+
+
+def test_rattacher_au_parent_idempotent_si_standalone_absent(factory) -> None:
+    with factory() as s:
+        parent_id, standalone_id, _ = _pieces_parent_et_avenant(s)
+        rattacher_au_parent(s, contrat_id=standalone_id, parent_contrat_id=parent_id)
+        s.commit()
+
+    # Rejeu de l'activity : le standalone n'existe plus → renvoie le parent, no-op.
+    with factory() as s:
+        cible = rattacher_au_parent(s, contrat_id=standalone_id, parent_contrat_id=parent_id)
+        s.commit()
+    assert cible == parent_id
+
+
+def test_rattacher_au_parent_parent_introuvable_leve(factory) -> None:
+    import uuid
+
+    with factory() as s:
+        _, standalone_id, _ = _pieces_parent_et_avenant(s)
+        with pytest.raises(ValueError, match="parent introuvable"):
+            rattacher_au_parent(s, contrat_id=standalone_id, parent_contrat_id=uuid.uuid4())

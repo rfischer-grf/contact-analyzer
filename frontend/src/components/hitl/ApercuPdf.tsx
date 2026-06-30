@@ -9,9 +9,9 @@ import type { Provenance } from "../../api/types";
  * Aperçu PDF + surlignage de la provenance (#78, spec §2.4).
  *
  * Rend la page source via pdf.js et superpose la bbox du champ sélectionné
- * (overlay de validation). Si aucune source n'est disponible (URL absente, ou
- * l'API ne fournit pas encore la provenance — voir TODO ci-dessous), un
- * placeholder explicite est affiché à la place du canevas.
+ * (overlay de validation). L'URL présignée du document et la provenance sont
+ * fournies par l'API (#35) ; si l'URL est absente (pièce sans PDF accessible),
+ * un placeholder explicite est affiché à la place du canevas.
  *
  * Les bbox sont en coordonnées PDF (points, origine bas-gauche) → converties
  * vers le canevas (origine haut-gauche) via le viewport pdf.js.
@@ -95,11 +95,10 @@ export function ApercuPdf({ documentUrl, provenance }: ApercuPdfProps): JSX.Elem
           textAlign: "center",
         }}
       >
-        Aperçu PDF indisponible (placeholder).
+        Aperçu PDF indisponible pour cette pièce.
         <br />
-        L'URL du document source et la provenance (page + bbox) seront fournies par l'API
-        (TODO : la file de revue HITL ne renvoie aujourd'hui que les noms de champs). La
-        logique de rendu pdf.js + surlignage bbox est en place.
+        Aucune URL de document source n'a pu être obtenue (stockage S3 injoignable ou
+        pièce absente). Le rendu pdf.js + surlignage bbox s'active dès qu'une URL est fournie.
       </div>
     );
   }

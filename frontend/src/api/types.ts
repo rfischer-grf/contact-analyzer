@@ -179,8 +179,41 @@ export interface ResultatSemantique {
  * HITL (gate de validation — spec §2.4)
  * ----------------------------------------------------------------------- */
 
-export interface ChampsARevoir {
-  champs: string[];
+/** Provenance d'un champ extrait : page + bbox + extrait source (§3). */
+export interface Provenance {
+  /** Page (1-indexée) dans le PDF source. */
+  page: number;
+  /** Boîte englobante en coordonnées PDF (points, origine bas-gauche), ou `null`. */
+  bbox?: [number, number, number, number] | null;
+  /** Texte source brut d'où le champ a été extrait. */
+  extrait?: string;
+}
+
+/** Un champ d'extraction sous le seuil, tel que renvoyé par l'API (#35). */
+export interface ChampARevoirAPI {
+  cle: string;
+  valeur: unknown;
+  confiance: number;
+  source: Provenance | null;
+}
+
+/** Réponse enrichie de la file de revue par champ : aperçu PDF + champs (#35). */
+export interface ChampsARevoirReponse {
+  /** URL présignée GET du PDF source (aperçu + overlay bbox), ou `null`. */
+  document_url: string | null;
+  champs: ChampARevoirAPI[];
+}
+
+/** Champ à revoir côté UI : valeur éditable + valeur d'origine + provenance. */
+export interface ChampRevue {
+  cle: string;
+  libelle: string;
+  /** Valeur courante (éditable par le validateur). */
+  valeur: string;
+  /** Valeur extraite d'origine (pour détecter une correction). */
+  valeurOriginale: string;
+  confiance: number;
+  source: Provenance | null;
 }
 
 export interface Correction {
@@ -190,6 +223,9 @@ export interface Correction {
   /** Valeur corrigée par le validateur (`null` si le champ est effacé). */
   nouvelle_valeur: string | null;
 }
+
+/** Alias lisible côté page de validation (une entrée de correction). */
+export type CorrectionEntree = Correction;
 
 export interface CorrectionsRequete {
   corrections: Correction[];

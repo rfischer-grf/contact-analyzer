@@ -55,6 +55,7 @@ class IngestionWorkflow:
     def __init__(self) -> None:
         self._etat: EtatIngestion = EtatIngestion.RECU
         self._decision: str | None = None
+        self._parent_contrat_id: str | None = None
 
     @workflow.query
     def statut(self) -> str:
@@ -62,8 +63,12 @@ class IngestionWorkflow:
         return self._etat.value
 
     @workflow.signal
-    def valider(self) -> None:
+    def valider(self, parent_contrat_id: str | None = None) -> None:
+        """Validation HITL. `parent_contrat_id` (optionnel) = parent confirmé pour un
+        avenant (#33) : à null, la pièce reste un contrat autonome ; renseigné, elle
+        est rattachée au parent avant commit (jamais d'auto-lien hors HITL — §7)."""
         self._decision = "valider"
+        self._parent_contrat_id = parent_contrat_id
 
     @workflow.signal
     def rejeter(self) -> None:
@@ -132,11 +137,18 @@ class IngestionWorkflow:
             self._etat = EtatIngestion.REJETE_METIER
             return self._etat.value
 
-        # Validé : commit de l'état effectif puis projection Weaviate (APRÈS COMMITE).
+        # Validé. Si un parent a été confirmé en HITL, on rattache l'avenant et la
+        # cible du commit devient le parent (#33) — son état effectif est refoldé
+        # avec l'avenant ; sinon la pièce reste un contrat autonome.
         self._etat = EtatIngestion.VALIDE
-        await self._activite("committer_contrat", contrat_id)
+        cible = contrat_id
+        if self._parent_contrat_id:
+            cible = await self._activite("rattacher_avenant", contrat_id, self._parent_contrat_id)
+
+        # Commit de l'état effectif puis projection Weaviate (APRÈS COMMITE).
+        await self._activite("committer_contrat", cible)
         self._etat = EtatIngestion.COMMITE
-        await self._activite("projeter_weaviate", tenant, contrat_id, markdown)
+        await self._activite("projeter_weaviate", tenant, cible, markdown)
         return self._etat.value
 
 

@@ -363,6 +363,32 @@ async def rejeter_metier_contrat(contrat_id: str) -> None:
 
 
 @activity.defn
+async def rattacher_avenant(contrat_id: str, parent_contrat_id: str) -> str:
+    """Rattache l'avenant au parent confirmé en gate HITL → renvoie l'id du parent (#33).
+
+    Déclenchée UNIQUEMENT quand le relecteur a confirmé un parent (le signal
+    `valider` porte alors `parent_contrat_id`). Déplace les pièces du contrat
+    standalone vers le parent, supprime l'orphelin (cf. `rattacher_au_parent`), et
+    renvoie l'id du parent — **cible du commit** : c'est l'état effectif du parent
+    qui est refoldé avec l'avenant. Garde-fou §7 : jamais d'auto-lien hors HITL.
+    """
+    from ..config import get_settings
+    from ..db import tenant_session
+    from ..db.ingestion_repo import rattacher_au_parent
+
+    settings = get_settings()
+    factory = _session_factory(settings)
+    cid = uuid.UUID(contrat_id)
+    parent = uuid.UUID(parent_contrat_id)
+
+    # Le tenant est lu hors-RLS (clé primaire) puis borne la session de rattachement.
+    tenant = _tenant_du_contrat(factory, cid)
+    with tenant_session(factory, tenant) as session:
+        rattacher_au_parent(session, contrat_id=cid, parent_contrat_id=parent)
+    return parent_contrat_id
+
+
+@activity.defn
 async def projeter_weaviate(tenant: str, contrat_id: str, markdown: str) -> None:
     """Projection Weaviate idempotente — UNIQUEMENT après COMMITE (#48, #50).
 

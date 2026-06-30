@@ -67,9 +67,19 @@ async def _persister(tenant: str, sha256: str, cle_s3: str, extraction: dict) ->
     return "11111111-1111-1111-1111-111111111111"
 
 
+#: Cibles successives de `committer_contrat` (le test du chemin avenant l'inspecte).
+COMMITS: list[str] = []
+
+
 @activity.defn(name="committer_contrat")
 async def _committer(contrat_id: str) -> None:
-    return None
+    COMMITS.append(contrat_id)
+
+
+@activity.defn(name="rattacher_avenant")
+async def _rattacher_avenant(contrat_id: str, parent_contrat_id: str) -> str:
+    # Rattachement réel : renvoie le parent, qui devient la cible du commit (#33).
+    return parent_contrat_id
 
 
 @activity.defn(name="rejeter_metier_contrat")
@@ -83,7 +93,16 @@ async def _projeter(tenant: str, contrat_id: str, markdown: str) -> None:
 
 
 # Pipeline aval commun (le double de contrôle/AV est injecté par scénario).
-_PIPELINE = [_parser, _extraire, _rapprocher, _persister, _committer, _rejeter, _projeter]
+_PIPELINE = [
+    _parser,
+    _extraire,
+    _rapprocher,
+    _persister,
+    _rattacher_avenant,
+    _committer,
+    _rejeter,
+    _projeter,
+]
 
 
 async def _demarrer_env():
@@ -93,7 +112,7 @@ async def _demarrer_env():
         pytest.skip(f"serveur de test Temporal indisponible : {exc}")
 
 
-async def _scenario(av, signal: str | None) -> str:
+async def _scenario(av, signal: str | None, parent: str | None = None) -> str:
     env = await _demarrer_env()
     async with env:
         async with Worker(
@@ -106,7 +125,7 @@ async def _scenario(av, signal: str | None) -> str:
                 IngestionWorkflow.run, "sha-test", id="acme:sha-test", task_queue=TASK_QUEUE
             )
             if signal == "valider":
-                await handle.signal(IngestionWorkflow.valider)
+                await handle.signal(IngestionWorkflow.valider, parent)
             elif signal == "rejeter":
                 await handle.signal(IngestionWorkflow.rejeter)
             return await handle.result()
@@ -122,3 +141,11 @@ def test_rejeter_mene_a_rejete_metier() -> None:
 
 def test_controle_terminal_mene_a_rejete_technique() -> None:
     assert asyncio.run(_scenario(_av_terminal, None)) == "REJETE_TECHNIQUE"
+
+
+def test_valider_avec_parent_commit_le_parent() -> None:
+    """#33 : un parent confirmé → rattachement → c'est le PARENT qui est committé."""
+    COMMITS.clear()
+    assert asyncio.run(_scenario(_av_ok, "valider", parent="parent-xyz")) == "COMMITE"
+    # La cible du commit est le parent (pas le contrat standalone `persister`).
+    assert COMMITS == ["parent-xyz"]

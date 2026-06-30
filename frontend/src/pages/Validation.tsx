@@ -20,11 +20,19 @@ import { BarreDecision } from "../components/hitl/BarreDecision";
  * Garde-fou : aucune donnée « à valider » n'entre dans alertes / ICS / Weaviate
  * avant la validation. Chaque champ porte valeur + confiance + provenance (§3).
  *
- * TODO(API) : api.hitl.champsARevoir ne renvoie aujourd'hui que les NOMS de
- * champs (string[]) — ni la valeur courante, ni la confiance, ni la provenance
- * (page + bbox). On construit donc des champs éditables « à blanc » et l'aperçu
- * PDF reste en placeholder tant que l'API ne fournit pas document_url + bbox.
+ * L'API (#35) renvoie désormais, par champ sous le seuil, sa valeur, sa confiance
+ * et sa provenance (page + bbox), plus `document_url` (PDF source présigné) : la
+ * liste est donc pré-remplie et l'aperçu PDF surligne la source réelle. Un champ
+ * facultatif permet de confirmer le rattachement d'un avenant à son contrat
+ * parent (#33) — jamais d'auto-lien : le lien n'est posé qu'à cette confirmation.
  */
+
+/** Rend une valeur extraite (scalaire ou objet) en texte éditable. */
+function valeurEnTexte(valeur: unknown): string {
+  if (valeur === null || valeur === undefined) return "";
+  if (typeof valeur === "object") return JSON.stringify(valeur);
+  return String(valeur);
+}
 
 /** Libellé lisible à partir du chemin pointé d'un champ (ex. `preavis.delai`). */
 function libelleChamp(cle: string): string {
@@ -55,9 +63,10 @@ export function Validation(): JSX.Element {
   const [decisionEnCours, setDecisionEnCours] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-
-  // URL du PDF source : non fournie par l'API à ce stade (TODO ci-dessus).
-  const documentUrl: string | null = null;
+  // URL présignée du PDF source (aperçu + overlay bbox), fournie par l'API (#35).
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  // Parent confirmé pour un avenant (#33) — vide = la pièce reste autonome.
+  const [parentContratId, setParentContratId] = useState("");
 
   const provenanceSelection = useMemo(() => {
     const champ = champs.find((c) => c.cle === selection) ?? champs[0];
@@ -72,16 +81,19 @@ export function Validation(): JSX.Element {
     setInfo(null);
     try {
       const reponse = await api.hitl.champsARevoir(id, seuil);
-      const construits: ChampRevue[] = reponse.champs.map((cle) => ({
-        cle,
-        libelle: libelleChamp(cle),
-        // Valeur/confiance/provenance non fournies par l'API → à blanc (TODO).
-        valeur: "",
-        valeurOriginale: "",
-        confiance: 0,
-        source: null,
-      }));
+      const construits: ChampRevue[] = reponse.champs.map((c) => {
+        const texte = valeurEnTexte(c.valeur);
+        return {
+          cle: c.cle,
+          libelle: libelleChamp(c.cle),
+          valeur: texte,
+          valeurOriginale: texte,
+          confiance: c.confiance,
+          source: c.source,
+        };
+      });
       setChamps(construits);
+      setDocumentUrl(reponse.document_url);
       setSelection(construits[0]?.cle ?? null);
       setContratCharge(id);
       if (construits.length === 0) {
@@ -90,6 +102,7 @@ export function Validation(): JSX.Element {
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e));
       setChamps([]);
+      setDocumentUrl(null);
       setContratCharge(null);
     } finally {
       setChargement(false);
@@ -122,11 +135,14 @@ export function Validation(): JSX.Element {
       if (corrections.length > 0) {
         await api.hitl.corrections(contratCharge, { corrections });
       }
-      // 2. Signal de validation → VALIDE → COMMITE côté saga.
-      await api.hitl.valider(contratCharge);
+      // 2. Signal de validation → VALIDE → COMMITE côté saga. Si un parent est
+      //    renseigné, l'avenant lui est rattaché avant commit (#33).
+      const parent = parentContratId.trim() || null;
+      await api.hitl.valider(contratCharge, parent);
       setInfo(
-        `Contrat validé (${corrections.length} correction(s) enregistrée(s)). ` +
-          "Il entre désormais dans les alertes, le feed ICS et l'index.",
+        `Contrat validé (${corrections.length} correction(s) enregistrée(s))` +
+          (parent ? `, rattaché au parent ${parent}` : "") +
+          ". Il entre désormais dans les alertes, le feed ICS et l'index.",
       );
     } catch (e) {
       setErreur(`Échec de la validation : ${e instanceof Error ? e.message : String(e)}`);
@@ -257,6 +273,28 @@ export function Validation(): JSX.Element {
               onSelection={setSelection}
               onModifier={modifier}
             />
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                fontSize: tokens.typo.taille.sm,
+                color: tokens.couleurs.texteAttenue,
+              }}
+            >
+              Rattacher à un contrat parent (avenant) — optionnel
+              <input
+                value={parentContratId}
+                onChange={(e) => setParentContratId(e.target.value)}
+                placeholder="UUID du contrat parent (laisser vide si contrat autonome)"
+                style={{
+                  marginTop: tokens.espacements.xs,
+                  border: `1px solid ${tokens.couleurs.bordure}`,
+                  borderRadius: tokens.rayons.md,
+                  padding: tokens.espacements.sm,
+                  fontSize: tokens.typo.taille.sm,
+                }}
+              />
+            </label>
             <BarreDecision
               onValider={() => void valider()}
               onRejeter={() => void rejeter()}
