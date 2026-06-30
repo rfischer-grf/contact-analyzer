@@ -2,10 +2,39 @@
 # Garde-fous (§7) : Garage (jamais MinIO), Weaviate (jamais pgvector), Mailpit en dev,
 # pas de Redis sans besoin concret.
 #
-# Démarrage : `cp .env.example .env && docker compose up -d`
-# Provisioning Garage (bucket + clés) : voir README, étape post-démarrage (#4).
+# Démarrage (depuis la racine) : `make up` — infra + migrate + API + worker + frontend +
+# provisioning Garage. Infra seule : `make up-infra` (services applicatifs sous profil `app`).
 
 name: clm
+
+# Environnement applicatif partagé par api / worker / migrate. Les hôtes pointent
+# vers les noms de services du réseau compose (jamais localhost depuis un conteneur).
+x-app-env: &app-env
+  CI_ENVIRONMENT: dev
+  CI_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-clm}:${POSTGRES_PASSWORD:-clm}@postgres:5432/${POSTGRES_DB:-clm}
+  CI_OIDC_ISSUER: http://keycloak:8080/realms/clm
+  CI_OIDC_AUDIENCE: clm-api
+  CI_TENANT_CLAIM: tenant
+  # DEV uniquement : pas de vérification de signature JWT (le tenant reste lu dans le token).
+  CI_AUTH_DEV_INSECURE: "true"
+  CI_S3_ENDPOINT_URL: http://garage:3900 # interne (HEAD côté serveur)
+  CI_S3_PUBLIC_ENDPOINT_URL: ${CI_S3_PUBLIC_ENDPOINT_URL:-http://localhost:3900} # signé dans les URLs présignées (navigateur)
+  CI_S3_REGION: garage
+  CI_S3_BUCKET: contrats
+  # Identifiants S3 de DEV déterministes : ceux qu'importe `make provision-garage`
+  # (cf. infra/provision-garage.sh). Surchargeables via infra/.env.
+  CI_S3_ACCESS_KEY: ${CI_S3_ACCESS_KEY:-GK31c1d34dd99c7b8e51c52940}
+  CI_S3_SECRET_KEY: ${CI_S3_SECRET_KEY:-1c1d34dd99c7b8e51c1d34dd99c7b8e51c1d34dd99c7b8e51c1d34dd99c7b8e5}
+  CI_TEMPORAL_TARGET: temporal:7233
+  CI_TEMPORAL_NAMESPACE: default
+  CI_TEMPORAL_TASK_QUEUE: ingestion
+
+# Construction partagée : une seule image pour l'API, le worker et le one-shot migrate.
+x-app-build: &app-build
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: clm-app:dev
 
 services:
   postgres:
@@ -36,12 +65,19 @@ services:
       - garage_data:/var/lib/garage/data
 
   garage-webui:
-    image: khairul169/garage-webui:latest
+    # Épinglé : la série 1.0.x parle l'API admin /v1 de Garage v1.0.1. À partir de
+    # 1.1.0 le webui passe à l'API admin /v2 (Garage v2.x) → « Unknown API endpoint
+    # GET /v2/ListBuckets » et aucun bucket affiché. À remonter avec Garage.
+    image: khairul169/garage-webui:1.0.9
     depends_on:
       - garage
     environment:
       API_BASE_URL: "http://garage:3903"
       S3_ENDPOINT_URL: "http://garage:3900"
+    # Le webui lit /etc/garage.toml pour le token admin ([admin] admin_token) :
+    # sans ce montage il ne peut pas interroger l'API admin → aucun bucket listé.
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
     ports:
       - "3909:3909"
 
@@ -58,6 +94,10 @@ services:
 
   temporal:
     image: temporalio/temporal:latest
+    # L'image tourne en uid 1000 mais le volume `/data` est créé root-owned : sans
+    # ceci, le dev-server ne peut pas créer la base SQLite (« unable to open database
+    # file »). En root, il écrit dans le volume → persistance de la saga entre restarts.
+    user: root
     command:
       ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
     ports:
@@ -65,6 +105,12 @@ services:
       - "8233:8233" # Web UI
     volumes:
       - temporal_data:/data
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "localhost:7233"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   clamav:
     image: clamav/clamav:latest
@@ -100,6 +146,87 @@ services:
     volumes:
       - mailpit_data:/data
 
+  # --- Application (profil `app`) ------------------------------------------
+  # Hors du profil `app`, `docker compose up` ne lance que l'infra ci-dessus.
+  # Avec `--profile app` (cf. `make up`), on lance aussi migrate → api + worker.
+
+  # One-shot : applique le schéma + RLS + audit avant que l'app ne démarre.
+  migrate:
+    <<: *app-build
+    profiles: ["app"]
+    environment:
+      <<: *app-env
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app-build
+    profiles: ["app"]
+    environment:
+      <<: *app-env
+    command:
+      [
+        "uvicorn",
+        "contract_intelligence.api.app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../src:/app/src:ro # rechargement à chaud du code (uvicorn --reload)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+      garage:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    <<: *app-build
+    profiles: ["app"]
+    environment:
+      <<: *app-env
+    command: ["python", "-m", "contract_intelligence.worker.bootstrap"]
+    volumes:
+      - ../src:/app/src:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # SPA React/Vite. Les VITE_* sont consommées DANS LE NAVIGATEUR → URLs publiées
+  # sur l'hôte (localhost), jamais des noms de services compose. Source montée pour
+  # le HMR ; node_modules isolé dans un volume (sinon le bind écraserait l'install).
+  frontend:
+    image: node:20-bookworm-slim
+    profiles: ["app"]
+    working_dir: /app
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8080}
+      VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-clm}
+      VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-clm-spa}
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   pg_data:
   garage_meta:
@@ -107,3 +234,4 @@ volumes:
   temporal_data:
   weaviate_data:
   mailpit_data:
+  frontend_node_modules:

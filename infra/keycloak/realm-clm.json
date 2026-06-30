@@ -4,7 +4,6 @@
   "displayName": "Contract Intelligence (CLM)",
   "sslRequired": "none",
   "registrationAllowed": false,
-  "_comment": "Realm de DEV. Mots de passe et clients ci-dessous = local uniquement.",
   "clients": [
     {
       "clientId": "clm-spa",

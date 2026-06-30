@@ -12,8 +12,8 @@ import { tokens } from "../../theme";
  * S3 (Garage) est déclenché par le parent une fois le fichier choisi.
  *
  * Contrat de thème supposé (fourni par la fondation, cf. CarteKpi) :
- *   tokens.couleur.{fond, fondCarte, bordure, accent, accentDoux, texte, texteAttenue}
- *   tokens.espace.{sm, md, lg, xl}  ·  tokens.rayon.{md, lg}  ·  tokens.police.{sm, md, lg}
+ *   tokens.couleurs.{fond, surface, bordure, accent, accentDoux, texte, texteAttenue}
+ *   tokens.espacements.{sm, md, lg, xl}  ·  tokens.rayons.{md, lg}  ·  tokens.typo.taille.{sm, md, lg}
  */
 
 interface DepotFichierProps {
@@ -73,10 +73,10 @@ export function DepotFichier({
           }
         }}
         style={{
-          border: `2px dashed ${survol ? tokens.couleur.accent : tokens.couleur.bordure}`,
-          background: survol ? tokens.couleur.accentDoux : tokens.couleur.fondCarte,
-          borderRadius: tokens.rayon.lg,
-          padding: tokens.espace.xl,
+          border: `2px dashed ${survol ? tokens.couleurs.accent : tokens.couleurs.bordure}`,
+          background: survol ? tokens.couleurs.accentDoux : tokens.couleurs.surface,
+          borderRadius: tokens.rayons.lg,
+          padding: tokens.espacements.xl,
           textAlign: "center",
           cursor: enCours ? "default" : "pointer",
           opacity: enCours ? 0.6 : 1,
@@ -93,19 +93,19 @@ export function DepotFichier({
         />
         {fichier ? (
           <div>
-            <div style={{ fontSize: tokens.police.md, color: tokens.couleur.texte, fontWeight: 600 }}>
+            <div style={{ fontSize: tokens.typo.taille.md, color: tokens.couleurs.texte, fontWeight: 600 }}>
               {fichier.name}
             </div>
-            <div style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue }}>
+            <div style={{ fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue }}>
               {tailleLisible(fichier.size)} · {fichier.type || "type inconnu"}
             </div>
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: tokens.police.lg, color: tokens.couleur.texte }}>
+            <div style={{ fontSize: tokens.typo.taille.lg, color: tokens.couleurs.texte }}>
               Glisser un PDF ici, ou cliquer pour choisir
             </div>
-            <div style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue }}>
+            <div style={{ fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue }}>
               Contrat fournisseur (PDF). Les octets partent directement vers le stockage
               souverain, jamais via l'API.
             </div>
@@ -113,18 +113,18 @@ export function DepotFichier({
         )}
       </div>
 
-      <div style={{ display: "flex", gap: tokens.espace.sm, marginTop: tokens.espace.md }}>
+      <div style={{ display: "flex", gap: tokens.espacements.sm, marginTop: tokens.espacements.md }}>
         <button
           type="button"
           onClick={onDeposer}
           disabled={!fichier || enCours}
           style={{
-            background: tokens.couleur.accent,
-            color: tokens.couleur.texteInverse,
+            background: tokens.couleurs.accent,
+            color: tokens.couleurs.texteInverse,
             border: "none",
-            borderRadius: tokens.rayon.md,
-            padding: `${tokens.espace.sm} ${tokens.espace.lg}`,
-            fontSize: tokens.police.md,
+            borderRadius: tokens.rayons.md,
+            padding: `${tokens.espacements.sm} ${tokens.espacements.lg}`,
+            fontSize: tokens.typo.taille.md,
             fontWeight: 600,
             cursor: !fichier || enCours ? "not-allowed" : "pointer",
             opacity: !fichier || enCours ? 0.6 : 1,
@@ -138,11 +138,11 @@ export function DepotFichier({
             onClick={() => onSelection(null)}
             style={{
               background: "transparent",
-              color: tokens.couleur.texteAttenue,
-              border: `1px solid ${tokens.couleur.bordure}`,
-              borderRadius: tokens.rayon.md,
-              padding: `${tokens.espace.sm} ${tokens.espace.lg}`,
-              fontSize: tokens.police.md,
+              color: tokens.couleurs.texteAttenue,
+              border: `1px solid ${tokens.couleurs.bordure}`,
+              borderRadius: tokens.rayons.md,
+              padding: `${tokens.espacements.sm} ${tokens.espacements.lg}`,
+              fontSize: tokens.typo.taille.md,
               cursor: "pointer",
             }}
           >

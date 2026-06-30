@@ -33,12 +33,24 @@ class Settings(BaseSettings):
     auth_dev_insecure: bool = False
 
     # --- Stockage S3 (Garage, jamais MinIO) ---
+    # Endpoint INTERNE : utilisé côté serveur (HEAD au confirm). En conteneur =
+    # http://garage:3900 ; sur l'hôte = http://localhost:3900.
     s3_endpoint_url: str = "http://localhost:3900"
+    # Endpoint PUBLIC (vu par le NAVIGATEUR) pour signer les URLs présignées : le
+    # navigateur ne résout pas `garage`, il faut un hôte publié. L'hôte fait partie
+    # de la signature SigV4 → on signe donc l'URL avec l'endpoint que le navigateur
+    # utilisera. None → retombe sur s3_endpoint_url (dev sur l'hôte = déjà localhost).
+    s3_public_endpoint_url: str | None = None
     s3_region: str = "garage"
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_bucket: str = "contrats"
     presign_ttl_seconds: int = 900  # PUT présigné de courte durée
+
+    @property
+    def s3_presign_endpoint(self) -> str:
+        """Endpoint utilisé pour signer les URLs présignées (public si défini)."""
+        return self.s3_public_endpoint_url or self.s3_endpoint_url
 
     # --- Temporal ---
     temporal_target: str = "localhost:7233"

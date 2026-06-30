@@ -48,18 +48,42 @@ src/contract_intelligence/
   alerting/                   # job quotidien (date limite de dénonciation), feed ICS, capability token
   api/                        # FastAPI : auth OIDC (tenant), routers presign/hitl/ics/…
   worker/                     # saga Temporal : états, workflows, activities
+frontend/                     # SPA React/Vite (OIDC Keycloak) — appelle l'API (VITE_API_URL)
 migrations/                   # Alembic : schéma initial + RLS multi-tenant + audit append-only
-infra/                        # docker-compose, Keycloak (realm), Garage (config), .env
+infra/                        # docker-compose (infra + app), Keycloak (realm), Garage (config + provisioning), .env
+Dockerfile                    # image applicative de dev (API + worker + migrate)
+Makefile                      # pilotage de la stack : make up / down / logs / ...
 tests/                        # pytest (domaine, calculs, fold, committer, API, RLS)
 ```
 
-## Développement
+## Démarrage rapide (tout-en-un)
+
+Pré-requis : Docker (+ Compose) et `make`. **Une seule commande** lance toute la stack —
+infra, migrations, API, worker et frontend — puis provisionne Garage :
+
+```bash
+make up        # infra + migrate + API + worker + frontend, puis provisioning Garage
+make ps        # état des services
+make logs      # logs API + worker + frontend
+make health    # GET http://localhost:8000/health
+make down      # tout arrêter (volumes conservés ; `make down-v` pour la RAZ)
+make help      # toutes les cibles
+```
+
+L'API et le worker tournent dans des conteneurs (image `clm-app:dev`, cf. `Dockerfile`) ;
+le code `src/` est monté en lecture seule → l'API recharge à chaud (`uvicorn --reload`).
+Le frontend (`frontend/`, SPA React/Vite sur **http://localhost:5173**) tourne dans un
+conteneur Node : source montée pour le HMR, `npm install` au premier démarrage. Les
+services applicatifs sont sous le profil compose `app` : `docker compose up` sans profil
+(ou `make up-infra`) ne lance que l'infra, pour développer l'app sur l'hôte.
+
+## Développement sur l'hôte (alternative)
 
 Pré-requis : Docker (+ Compose), Python 3.11, [`uv`](https://docs.astral.sh/uv/).
 
 ```bash
-# 1) Stack de dev
-cd infra && cp .env.example .env && docker compose up -d
+# 1) Infra seule (sans API/worker)
+make up-infra        # ≡ cd infra && cp .env.example .env && docker compose up -d
 
 # 2) Environnement Python + dépendances
 uv venv --python 3.11 .venv
@@ -85,9 +109,11 @@ UIs de dev : Keycloak `:8080`, Temporal `:8233`, Mailpit `:8025`, garage-webui `
 Weaviate `:8081`. Utilisateurs Keycloak de test : `alice`/`alice` (tenant `acme`),
 `bob`/`bob` (tenant `globex`).
 
-> **Provisioning Garage (#4)** : après le premier démarrage, créer le layout, le bucket
-> et une clé d'accès (`garage layout assign…`, `garage bucket create contrats`,
-> `garage key create`), puis renseigner `CI_S3_ACCESS_KEY` / `CI_S3_SECRET_KEY`.
+> **Provisioning Garage** : `make up` l'exécute automatiquement (`make provision-garage` /
+> `infra/provision-garage.sh`, idempotent) — layout mono-nœud, bucket `contrats` et clé
+> d'accès S3 de dev **déterministe** (cf. `infra/.env.example`), autorisée en lecture/écriture.
+> Pour un déploiement réel, générer la clé via `garage key create` et renseigner
+> `CI_S3_ACCESS_KEY` / `CI_S3_SECRET_KEY` sans jamais la commiter.
 
 ## Statut
 

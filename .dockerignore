@@ -1,0 +1,13 @@
+# Réduit le contexte de build (le contexte est la racine du dépôt, cf. infra/docker-compose.yml).
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+infra/.env
+docs
+tests
+*.md

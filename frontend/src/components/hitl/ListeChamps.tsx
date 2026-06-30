@@ -10,8 +10,8 @@ import type { ChampRevue } from "../../api/types";
  * alimentent le gold set (envoyées par le parent à la validation).
  *
  * Contrat de thème supposé (fourni par la fondation) :
- *   tokens.couleur.{fondCarte, bordure, accent, accentDoux, texte, texteAttenue, danger, succes}
- *   tokens.espace.{xs, sm, md}  ·  tokens.rayon.md  ·  tokens.police.{xs, sm, md}
+ *   tokens.couleurs.{surface, bordure, accent, accentDoux, texte, texteAttenue, danger, succes}
+ *   tokens.espacements.{xs, sm, md}  ·  tokens.rayons.md  ·  tokens.typo.taille.{xs, sm, md}
  */
 
 /** Seuil d'affichage « confiance faible » (cohérent avec le seuil API par défaut). */
@@ -34,14 +34,14 @@ export function ListeChamps({
 }: ListeChampsProps): JSX.Element {
   if (champs.length === 0) {
     return (
-      <p style={{ fontSize: tokens.police.sm, color: tokens.couleur.texteAttenue }}>
+      <p style={{ fontSize: tokens.typo.taille.sm, color: tokens.couleurs.texteAttenue }}>
         Aucun champ sous le seuil de confiance : rien à revoir manuellement.
       </p>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: tokens.espace.sm }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: tokens.espacements.sm }}>
       {champs.map((champ) => {
         const faible = champ.confiance < SEUIL_AFFICHAGE;
         const actif = selection === champ.cle;
@@ -51,10 +51,10 @@ export function ListeChamps({
             key={champ.cle}
             onClick={() => onSelection(champ.cle)}
             style={{
-              border: `${actif ? 2 : 1}px solid ${actif ? tokens.couleur.accent : tokens.couleur.bordure}`,
-              background: actif ? tokens.couleur.accentDoux : tokens.couleur.fondCarte,
-              borderRadius: tokens.rayon.md,
-              padding: tokens.espace.md,
+              border: `${actif ? 2 : 1}px solid ${actif ? tokens.couleurs.accent : tokens.couleurs.bordure}`,
+              background: actif ? tokens.couleurs.accentDoux : tokens.couleurs.surface,
+              borderRadius: tokens.rayons.md,
+              padding: tokens.espacements.md,
               cursor: "pointer",
             }}
           >
@@ -63,16 +63,16 @@ export function ListeChamps({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "baseline",
-                fontSize: tokens.police.sm,
-                color: tokens.couleur.texteAttenue,
-                gap: tokens.espace.sm,
+                fontSize: tokens.typo.taille.sm,
+                color: tokens.couleurs.texteAttenue,
+                gap: tokens.espacements.sm,
               }}
             >
-              <span style={{ color: tokens.couleur.texte }}>{champ.libelle}</span>
+              <span style={{ color: tokens.couleurs.texte }}>{champ.libelle}</span>
               <span
                 style={{
-                  fontSize: tokens.police.xs,
-                  color: faible ? tokens.couleur.danger : tokens.couleur.succes,
+                  fontSize: tokens.typo.taille.xs,
+                  color: faible ? tokens.couleurs.danger : tokens.couleurs.succes,
                   fontWeight: 600,
                   whiteSpace: "nowrap",
                 }}
@@ -88,23 +88,23 @@ export function ListeChamps({
               style={{
                 width: "100%",
                 boxSizing: "border-box",
-                marginTop: tokens.espace.xs,
-                border: `1px solid ${modifie ? tokens.couleur.accent : tokens.couleur.bordure}`,
-                borderRadius: tokens.rayon.md,
-                padding: tokens.espace.sm,
-                fontSize: tokens.police.md,
-                color: tokens.couleur.texte,
+                marginTop: tokens.espacements.xs,
+                border: `1px solid ${modifie ? tokens.couleurs.accent : tokens.couleurs.bordure}`,
+                borderRadius: tokens.rayons.md,
+                padding: tokens.espacements.sm,
+                fontSize: tokens.typo.taille.md,
+                color: tokens.couleurs.texte,
               }}
             />
 
             {modifie && (
-              <div style={{ fontSize: tokens.police.xs, color: tokens.couleur.texteAttenue, marginTop: tokens.espace.xs }}>
+              <div style={{ fontSize: tokens.typo.taille.xs, color: tokens.couleurs.texteAttenue, marginTop: tokens.espacements.xs }}>
                 Valeur initiale : « {champ.valeurOriginale || "—"} » → corrigée
               </div>
             )}
 
             {champ.source && (
-              <p style={{ fontSize: tokens.police.xs, color: tokens.couleur.texteAttenue, margin: `${tokens.espace.xs} 0 0` }}>
+              <p style={{ fontSize: tokens.typo.taille.xs, color: tokens.couleurs.texteAttenue, margin: `${tokens.espacements.xs} 0 0` }}>
                 Source p.{champ.source.page} : « {champ.source.extrait} »
               </p>
             )}
