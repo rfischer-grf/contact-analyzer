@@ -29,8 +29,10 @@ def tenant_session(factory: sessionmaker[Session], tenant: str) -> Iterator[Sess
     Le tenant provient du token, jamais du client (§7).
     """
     with factory() as session, session.begin():
-        session.execute(
-            text("SELECT set_config('app.current_tenant', :t, true)"),
-            {"t": tenant},
-        )
+        # `set_config` est spécifique PostgreSQL ; no-op ailleurs (ex. SQLite en test).
+        if session.get_bind().dialect.name == "postgresql":
+            session.execute(
+                text("SELECT set_config('app.current_tenant', :t, true)"),
+                {"t": tenant},
+            )
         yield session
