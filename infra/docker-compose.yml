@@ -17,7 +17,8 @@ x-app-env: &app-env
   CI_TENANT_CLAIM: tenant
   # DEV uniquement : pas de vérification de signature JWT (le tenant reste lu dans le token).
   CI_AUTH_DEV_INSECURE: "true"
-  CI_S3_ENDPOINT_URL: http://garage:3900
+  CI_S3_ENDPOINT_URL: http://garage:3900 # interne (HEAD côté serveur)
+  CI_S3_PUBLIC_ENDPOINT_URL: ${CI_S3_PUBLIC_ENDPOINT_URL:-http://localhost:3900} # signé dans les URLs présignées (navigateur)
   CI_S3_REGION: garage
   CI_S3_BUCKET: contrats
   # Identifiants S3 de DEV déterministes : ceux qu'importe `make provision-garage`

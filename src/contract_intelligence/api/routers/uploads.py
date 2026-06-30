@@ -37,14 +37,16 @@ def _objet_cle(tenant: str, sha256: str) -> str:
     return f"{tenant}/{sha256.lower()}"
 
 
-def _s3_client(settings: Settings):  # type: ignore[no-untyped-def]
+def _s3_client(settings: Settings, *, endpoint: str | None = None):  # type: ignore[no-untyped-def]
+    # Path-style forcé : URLs `…/contrats/<clé>` déterministes (pas de vhost
+    # `contrats.localhost` que le navigateur ne résoudrait pas).
     return boto3.client(
         "s3",
-        endpoint_url=settings.s3_endpoint_url,
+        endpoint_url=endpoint or settings.s3_endpoint_url,
         region_name=settings.s3_region,
         aws_access_key_id=settings.s3_access_key or None,
         aws_secret_access_key=settings.s3_secret_key or None,
-        config=Config(signature_version="s3v4"),
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
     )
 
 
@@ -55,7 +57,9 @@ def presign(
     settings: Settings = Depends(get_settings),
 ) -> PresignResponse:
     cle = _objet_cle(principal.tenant, req.sha256)
-    url = _s3_client(settings).generate_presigned_url(
+    # Signé avec l'endpoint PUBLIC : c'est l'hôte que le navigateur contactera (il
+    # fait partie de la signature SigV4, donc pas de réécriture possible a posteriori).
+    url = _s3_client(settings, endpoint=settings.s3_presign_endpoint).generate_presigned_url(
         "put_object",
         Params={"Bucket": settings.s3_bucket, "Key": cle, "ContentType": req.content_type},
         ExpiresIn=settings.presign_ttl_seconds,
