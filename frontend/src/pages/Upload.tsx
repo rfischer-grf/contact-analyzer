@@ -207,8 +207,9 @@ export function Upload(): JSX.Element {
 }
 
 /**
- * Saisie manuelle d'un workflow_id à suivre (filet de sécurité tant que
- * l'API ne renvoie pas explicitement le workflow_id — TODO #16/#22).
+ * Saisie manuelle d'un workflow_id à suivre : permet de reprendre le suivi d'une
+ * ingestion antérieure (ou démarrée ailleurs) sans re-déposer le fichier. Le dépôt
+ * nominal récupère le workflow_id directement depuis `confirm` (cf. `deposer`).
  */
 function SuiviChamp({ onSuivre }: { onSuivre: (id: string) => void }): JSX.Element {
   const [valeur, setValeur] = useState("");

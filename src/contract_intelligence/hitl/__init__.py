@@ -11,11 +11,18 @@ générer d'alerte.
 """
 
 from .corrections import enregistrer_correction, gold_set
-from .revue import champs_a_revoir, champs_a_revoir_par_seuils
+from .revue import (
+    ResumeContratARevoir,
+    champs_a_revoir,
+    champs_a_revoir_par_seuils,
+    file_de_revue,
+)
 
 __all__ = [
+    "ResumeContratARevoir",
     "champs_a_revoir",
     "champs_a_revoir_par_seuils",
     "enregistrer_correction",
+    "file_de_revue",
     "gold_set",
 ]

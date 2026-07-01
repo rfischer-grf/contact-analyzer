@@ -5,7 +5,8 @@ pas d'I/O réseau) : il décode les octets en UTF-8 et fabrique un bloc par lign
 non vide avec une bbox simulée déterministe et un markdown agrégé. Il sert à
 exercer extraction, HITL, chunking et provenance (#26) sans dépendance lourde.
 
-Le parser réel (Docling CPU + OCR conditionnel RapidOCR) reste TODO(#24, #25, #27).
+Le parser réel (Docling CPU + OCR conditionnel RapidOCR) est livré par
+`docling_parser.DoclingParser`.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ class FakeParser(Parser):
     Hypothèse : le `contenu` est du texte UTF-8 (pièce déjà « à couche texte »),
     donc l'OCR n'est jamais sollicité — cohérent avec l'OCR **conditionnel** de
     la spec (§2.2). `ocr_si_scanne` est accepté pour respecter le contrat mais
-    n'a pas d'effet ici (pas de vrai OCR — TODO(#25)).
+    n'a pas d'effet ici (pas de vrai OCR : le Fake ne dépend pas de RapidOCR).
 
     `largeur` / `hauteur` paramètrent l'échelle des bbox simulées (coordonnées
     en points, origine haut-gauche).

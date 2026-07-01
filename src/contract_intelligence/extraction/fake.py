@@ -5,7 +5,8 @@ chaque `Champ` portant valeur + confiance + `source=Provenance(...)`. Quelques
 champs sont volontairement sous le seuil (cf. `seuils`) pour exercer la file de
 revue HITL en test / démo offline.
 
-Le vrai extracteur LLM est livré plus tard (cf. `base.Extracteur`, TODO #28/#29/#30).
+Le vrai extracteur LLM est `llm.ExtracteurLLM` (Pydantic AI, #28/#29/#30) ;
+`FakeExtracteur` reste l'implémentation offline pour les tests et la démo.
 """
 
 from __future__ import annotations

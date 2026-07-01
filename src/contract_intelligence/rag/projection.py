@@ -2,9 +2,9 @@
 
 Garde-fous (§6, §7) :
 - Écriture **uniquement après COMMITE** : `projeter_contrat` est appelée par
-  l'activity de projection en fin de saga (delete-then-insert). Le câblage réel
-  de la saga + le client Weaviate réel sont laissés en **TODO(#48)** ; ici la
-  logique est exercée contre un `VectorStore` abstrait (Fake en test).
+  l'activity de projection en fin de saga (delete-then-insert). La logique est
+  écrite contre un `VectorStore` abstrait : `WeaviateVectorStore` en réel (#48),
+  `FakeVectorStore` en test — même contrat, même idempotence.
 - **Idempotent sur `contrat_id`** : `upsert` réécrit l'intégralité des chunks du
   contrat → re-projeter ne crée pas de doublon (gère les avenants qui réécrivent
   l'état effectif).
@@ -35,10 +35,10 @@ def projeter_contrat(
 ) -> int:
     """Projette l'état effectif d'un contrat dans le vector store.
 
-    Appelée **uniquement après COMMITE** (activity de projection en fin de saga ;
-    câblage saga = TODO(#48)). Découpe `markdown` par clause, vectorise (embeddings
-    BYO), construit les métadonnées par chunk depuis la ligne `Contrat`, puis fait
-    un **delete-then-insert** idempotent sur `contrat_id`.
+    Appelée **uniquement après COMMITE** (activity de projection en fin de saga).
+    Découpe `markdown` par clause, vectorise (embeddings BYO), construit les
+    métadonnées par chunk depuis la ligne `Contrat`, puis fait un
+    **delete-then-insert** idempotent sur `contrat_id`.
 
     Renvoie le nombre de chunks projetés.
     """

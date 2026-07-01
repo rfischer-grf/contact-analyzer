@@ -41,35 +41,53 @@ def _principal():
 
 
 def test_valider_emet_signal() -> None:
-    appels: list[tuple[str, str]] = []
+    appels: list[tuple[str, str, str | None]] = []
 
-    async def double(workflow_id: str, decision: str) -> None:
-        appels.append((workflow_id, decision))
+    async def double(workflow_id: str, decision: str, parent: str | None = None) -> None:
+        appels.append((workflow_id, decision, parent))
 
     app.dependency_overrides[get_signal_sender] = lambda: double
     with TestClient(app) as client:
         resp = client.post("/hitl/contrats/wf-123/valider")
     assert resp.status_code == 200
     assert resp.json() == {"statut": "signal_emis", "decision": "valider"}
-    assert appels == [("wf-123", "valider")]
+    # Sans corps : aucun parent confirmé (la pièce reste un contrat autonome).
+    assert appels == [("wf-123", "valider", None)]
+
+
+def test_valider_avec_parent_transmet_le_parent() -> None:
+    """#33 : la confirmation d'un parent est transmise au signal `valider`."""
+    appels: list[tuple[str, str, str | None]] = []
+
+    async def double(workflow_id: str, decision: str, parent: str | None = None) -> None:
+        appels.append((workflow_id, decision, parent))
+
+    app.dependency_overrides[get_signal_sender] = lambda: double
+    with TestClient(app) as client:
+        resp = client.post(
+            "/hitl/contrats/wf-av/valider",
+            json={"parent_contrat_id": "parent-123"},
+        )
+    assert resp.status_code == 200
+    assert appels == [("wf-av", "valider", "parent-123")]
 
 
 def test_rejeter_emet_signal() -> None:
-    appels: list[tuple[str, str]] = []
+    appels: list[tuple[str, str, str | None]] = []
 
-    async def double(workflow_id: str, decision: str) -> None:
-        appels.append((workflow_id, decision))
+    async def double(workflow_id: str, decision: str, parent: str | None = None) -> None:
+        appels.append((workflow_id, decision, parent))
 
     app.dependency_overrides[get_signal_sender] = lambda: double
     with TestClient(app) as client:
         resp = client.post("/hitl/contrats/wf-9/rejeter")
     assert resp.status_code == 200
     assert resp.json() == {"statut": "signal_emis", "decision": "rejeter"}
-    assert appels == [("wf-9", "rejeter")]
+    assert appels == [("wf-9", "rejeter", None)]
 
 
 def test_signal_workflow_injoignable() -> None:
-    async def double(workflow_id: str, decision: str) -> None:
+    async def double(workflow_id: str, decision: str, parent: str | None = None) -> None:
         raise RuntimeError("injoignable")
 
     app.dependency_overrides[get_signal_sender] = lambda: double
@@ -131,8 +149,17 @@ def test_champs_a_revoir_endpoint(factory) -> None:
     with TestClient(app) as client:
         resp = client.get(f"/hitl/contrats/{cid}/champs-a-revoir")
     assert resp.status_code == 200
+    data = resp.json()
     # date_echeance (0.6) et preavis.delai (0.5) sous 0.8 ; le reste fiable.
-    assert resp.json() == {"champs": ["date_echeance", "preavis.delai"]}
+    par_cle = {c["cle"]: c for c in data["champs"]}
+    assert set(par_cle) == {"date_echeance", "preavis.delai"}
+    # Réponse enrichie : valeur + confiance + provenance par champ (#35).
+    assert par_cle["date_echeance"]["valeur"] == "2025-12-31"
+    assert par_cle["date_echeance"]["confiance"] == 0.6
+    assert par_cle["preavis.delai"]["valeur"] == 3
+    assert par_cle["preavis.delai"]["source"] is None  # provenance absente dans le double
+    # Aperçu PDF : URL présignée best-effort exposée (présente même si S3 absent).
+    assert "document_url" in data
 
 
 def test_champs_a_revoir_sans_extraction(factory) -> None:
@@ -145,4 +172,4 @@ def test_champs_a_revoir_sans_extraction(factory) -> None:
     with TestClient(app) as client:
         resp = client.get(f"/hitl/contrats/{cid}/champs-a-revoir")
     assert resp.status_code == 200
-    assert resp.json() == {"champs": []}
+    assert resp.json()["champs"] == []

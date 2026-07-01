@@ -27,7 +27,10 @@ async def main() -> None:
             activities.parser_document,
             activities.extraire_champs,
             activities.rapprocher_avenant,
-            activities.committer,
+            activities.persister,
+            activities.rattacher_avenant,
+            activities.committer_contrat,
+            activities.rejeter_metier_contrat,
             activities.projeter_weaviate,
         ],
     )

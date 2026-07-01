@@ -1,21 +1,35 @@
 """Workflows Temporal (spec §4).
 
 `IngestionWorkflow` matérialise la machine à états et enchaîne les activities du
-pipeline. Le **gate HITL** est une vraie attente de signal de durée indéterminée,
-avec relance si silence > 7 jours (en boucle) : c'est ce qui justifie Temporal
-(et non l'alerting, qui est un job quotidien — §2.6).
+pipeline réel. Le **gate HITL** est une vraie attente de signal de durée
+indéterminée, avec relance si silence > 7 jours (en boucle) : c'est ce qui
+justifie Temporal (et non l'alerting, qui est un job quotidien — §2.6).
 
-Garde-fous (§4) : une erreur d'infra est *retryable* (RetryPolicy) ; un AV négatif
-est une décision métier *terminale* → `REJETE_TECHNIQUE`. Les activities sont
-appelées par nom (découplage des signatures réelles, branchées via tickets dédiés).
+Enchaînement (§2, §4) :
+
+    CONTROLE → PARSING → EXTRACTION → RAPPROCHEMENT → persister → A_VALIDER
+        → [signal valider] → committer_contrat → COMMITE → projeter_weaviate
+        → [signal rejeter]  → rejeter_metier_contrat → REJETE_METIER
+
+Garde-fous (§4) : erreur d'infra = *retryable* (RetryPolicy) ; AV négatif /
+contrôle KO = décision métier *terminale* → l'activity lève une `ApplicationError`
+non-retryable, qui remonte ici en `ActivityError` → `REJETE_TECHNIQUE`. Les
+activities sont appelées par nom (découplage des signatures réelles).
+
+Le `tenant` et la clé S3 sont dérivés de l'identité de la saga : le workflow_id
+suit la convention `tenant:sha256` (cf. `api/routers/uploads.py::_workflow_id`),
+et la clé S3 `tenant/sha256` (cf. `_objet_cle`). Les bytes ne transitent jamais
+par l'API ni par le workflow — seules des références circulent (§7).
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from .states import EtatIngestion
@@ -41,6 +55,7 @@ class IngestionWorkflow:
     def __init__(self) -> None:
         self._etat: EtatIngestion = EtatIngestion.RECU
         self._decision: str | None = None
+        self._parent_contrat_id: str | None = None
 
     @workflow.query
     def statut(self) -> str:
@@ -48,38 +63,64 @@ class IngestionWorkflow:
         return self._etat.value
 
     @workflow.signal
-    def valider(self) -> None:
+    def valider(self, parent_contrat_id: str | None = None) -> None:
+        """Validation HITL. `parent_contrat_id` (optionnel) = parent confirmé pour un
+        avenant (#33) : à null, la pièce reste un contrat autonome ; renseigné, elle
+        est rattachée au parent avant commit (jamais d'auto-lien hors HITL — §7)."""
         self._decision = "valider"
+        self._parent_contrat_id = parent_contrat_id
 
     @workflow.signal
     def rejeter(self) -> None:
         self._decision = "rejeter"
 
-    async def _activite(self, nom: str, arg: str) -> object:
+    def _identite(self, sha256: str) -> tuple[str, str]:
+        """Dérive `(tenant, cle_s3)` de l'identité de la saga (workflow_id).
+
+        Convention `tenant:sha256` (uploads.py) → clé S3 `tenant/sha256`. Si le
+        workflow_id ne porte pas de tenant (ex. test), on retombe sur ``"default"``.
+        """
+        wf_id = workflow.info().workflow_id
+        tenant = wf_id.split(":", 1)[0] if ":" in wf_id else "default"
+        return tenant, f"{tenant}/{sha256}"
+
+    async def _activite(self, nom: str, *args: Any) -> Any:
         return await workflow.execute_activity(
             nom,
-            args=[arg],
+            args=list(args),
             start_to_close_timeout=_TIMEOUT_ACTIVITE,
             retry_policy=_RETRY,
         )
 
     @workflow.run
     async def run(self, sha256: str) -> str:
-        # Contrôle + antivirus.
-        self._etat = EtatIngestion.CONTROLE
-        sain = await self._activite("controle_et_av", sha256)
-        if not sain:
-            # Décision métier terminale (malware) — pas de retry.
-            self._etat = EtatIngestion.REJETE_TECHNIQUE
-            return self._etat.value
+        tenant, cle_s3 = self._identite(sha256)
 
-        # Parsing → extraction → rapprochement.
+        # Contrôle + antivirus. Un échec terminal (ControleRejete/MalwareDetecte)
+        # remonte en erreur non-retryable → REJETE_TECHNIQUE.
+        self._etat = EtatIngestion.CONTROLE
+        try:
+            await self._activite("controle_et_av", tenant, sha256, cle_s3)
+        except ActivityError as exc:
+            if _est_terminal(exc):
+                self._etat = EtatIngestion.REJETE_TECHNIQUE
+                return self._etat.value
+            raise
+
+        # Parsing → extraction.
         self._etat = EtatIngestion.PARSING
-        await self._activite("parser_document", sha256)
+        parse = await self._activite("parser_document", tenant, sha256, cle_s3)
+        markdown = parse.get("markdown", "") if isinstance(parse, dict) else ""
+
         self._etat = EtatIngestion.EXTRACTION
-        await self._activite("extraire_champs", sha256)
+        extraction = await self._activite("extraire_champs", markdown)
+
+        # Rapprochement avenant→parent : proposition seulement (jamais d'auto-lien).
         self._etat = EtatIngestion.RAPPROCHEMENT
-        await self._activite("rapprocher_avenant", sha256)
+        await self._activite("rapprocher_avenant", tenant, extraction)
+
+        # Persistance (Document + Contrat A_VALIDER) → contrat_id propagé en aval.
+        contrat_id = await self._activite("persister", tenant, sha256, cle_s3, extraction)
 
         # Gate HITL (#21) : attente de signal, relance toutes les 7 j tant que silence.
         self._etat = EtatIngestion.A_VALIDER
@@ -92,12 +133,31 @@ class IngestionWorkflow:
                 workflow.logger.info("Relance HITL : silence > 7 jours")
 
         if self._decision == "rejeter":
+            await self._activite("rejeter_metier_contrat", contrat_id)
             self._etat = EtatIngestion.REJETE_METIER
             return self._etat.value
 
-        # Validé : commit de l'état effectif puis projection Weaviate (après COMMITE).
+        # Validé. Si un parent a été confirmé en HITL, on rattache l'avenant et la
+        # cible du commit devient le parent (#33) — son état effectif est refoldé
+        # avec l'avenant ; sinon la pièce reste un contrat autonome.
         self._etat = EtatIngestion.VALIDE
-        await self._activite("committer", sha256)
+        cible = contrat_id
+        if self._parent_contrat_id:
+            cible = await self._activite("rattacher_avenant", contrat_id, self._parent_contrat_id)
+
+        # Commit de l'état effectif puis projection Weaviate (APRÈS COMMITE).
+        await self._activite("committer_contrat", cible)
         self._etat = EtatIngestion.COMMITE
-        await self._activite("projeter_weaviate", sha256)
+        await self._activite("projeter_weaviate", tenant, cible, markdown)
         return self._etat.value
+
+
+def _est_terminal(exc: ActivityError) -> bool:
+    """Vrai si l'échec d'activity est une décision métier terminale (non-retryable).
+
+    `controle_et_av` lève une `ApplicationError(non_retryable=True)` pour
+    `ControleRejete`/`MalwareDetecte` ; Temporal l'enveloppe dans une
+    `ActivityError` dont la cause est une `ApplicationError` marquée non-retryable.
+    """
+    cause = exc.cause
+    return isinstance(cause, ApplicationError) and bool(cause.non_retryable)

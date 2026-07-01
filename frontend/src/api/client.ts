@@ -13,7 +13,7 @@
 import { getToken, rafraichirToken } from "../auth/keycloak";
 import type {
   AbonnementIcs,
-  ChampsARevoir,
+  ChampsARevoirReponse,
   ConfirmReponse,
   ConfirmRequete,
   ContratDetail,
@@ -102,7 +102,7 @@ async function lireCorps<T>(reponse: Response): Promise<T> {
 }
 
 /** Construit une query string à partir d'un objet (ignore les valeurs nulles). */
-function qs(params: Record<string, unknown> | undefined): string {
+function qs(params?: object): string {
   if (!params) {
     return "";
   }
@@ -194,9 +194,9 @@ export const api = {
   },
 
   hitl: {
-    /** Champs sous le seuil de confiance à revoir (file de revue — §2.4). */
+    /** Champs sous le seuil + provenance + URL du PDF source (file de revue — §2.4). */
     champsARevoir: (contratId: string, seuil?: number) =>
-      apiClient.get<ChampsARevoir>(
+      apiClient.get<ChampsARevoirReponse>(
         `/hitl/contrats/${id(contratId)}/champs-a-revoir${qs({ seuil })}`,
       ),
     /** Enregistre les corrections (alimentent le gold set — §2.4). */
@@ -205,9 +205,16 @@ export const api = {
         `/hitl/contrats/${id(contratId)}/corrections`,
         req,
       ),
-    /** Signal `valider` du gate HITL (§4). */
-    valider: (contratId: string) =>
-      apiClient.post<DecisionHitlReponse>(`/hitl/contrats/${id(contratId)}/valider`),
+    /**
+     * Signal `valider` du gate HITL (§4). `parentContratId` (optionnel) confirme
+     * le rattachement d'un avenant au contrat parent proposé (#33) — jamais
+     * d'auto-lien : le lien n'est posé qu'à cette confirmation explicite.
+     */
+    valider: (contratId: string, parentContratId?: string | null) =>
+      apiClient.post<DecisionHitlReponse>(
+        `/hitl/contrats/${id(contratId)}/valider`,
+        parentContratId ? { parent_contrat_id: parentContratId } : undefined,
+      ),
     /** Signal `rejeter` du gate HITL (§4). */
     rejeter: (contratId: string) =>
       apiClient.post<DecisionHitlReponse>(`/hitl/contrats/${id(contratId)}/rejeter`),

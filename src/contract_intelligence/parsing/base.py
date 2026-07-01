@@ -4,16 +4,19 @@ Cette couche transforme les octets d'une pièce (PDF, image scannée) en blocs
 structurés porteurs de provenance (page + bbox) et en markdown, consommés en
 aval par l'extraction LLM (§2.3) et le chunking par clause (§6).
 
-Le parser réel n'est PAS encore implémenté ici : on livre un `Protocol` stable
-et un Fake testable (cf. `fake.FakeParser`). Garde-fous (§2.2, §7) à respecter
-dans l'implémentation réelle :
+On livre ici le `Protocol` stable (`Parser`) et ses dataclasses (`Bloc`,
+`DocumentParse`). Deux implémentations le réalisent : `fake.FakeParser` (tests
+pipeline, sans dépendance lourde) et `docling_parser.DoclingParser` (réel,
+Docling CPU + OCR conditionnel RapidOCR). Garde-fous (§2.2, §7) tenus par
+l'implémentation réelle :
 
-- Docling CPU réel : TODO(#24).
+- Docling CPU (#24) : la latence n'importe pas (pipeline async + gate HITL de
+  plusieurs jours), seuls comptent coût et throughput. Pas de GPU always-on ;
+  GPU seulement en pool L4 éphémère scale-to-zero, jamais colocalisé sur le
+  nœud vLLM.
 - OCR conditionnel **RapidOCR** (ONNX, efficace CPU), uniquement si la pièce n'a
-  pas de couche texte (PDF scanné) : TODO(#25). **Jamais EasyOCR** (torch,
-  réclame GPU), **jamais GPU always-on** ; GPU seulement en pool L4 éphémère
-  scale-to-zero, et jamais colocalisé sur le nœud vLLM.
-- Markdown + chunking par clause/article réel : TODO(#27).
+  pas de couche texte (PDF scanné) — #25. **Jamais EasyOCR** (torch, réclame GPU).
+- Markdown structuré + chunking par clause/article (#27, délégué à `rag.chunking`).
 - Conservation de la provenance (page + bbox) de chaque bloc (#26), indispensable
   au surlignage de validation HITL et à l'audit.
 """
@@ -54,16 +57,17 @@ class DocumentParse:
 class Parser(Protocol):
     """Contrat de la couche Parsing (octets → `DocumentParse`).
 
-    Implémentations : `fake.FakeParser` (tests pipeline) ; Docling réel à venir,
-    TODO(#24). Pas d'I/O réseau : le parsing opère sur les octets déjà récupérés
-    depuis S3 (Garage) par l'activity Temporal.
+    Implémentations : `fake.FakeParser` (tests pipeline) et
+    `docling_parser.DoclingParser` (réel, Docling CPU). Pas d'I/O réseau : le
+    parsing opère sur les octets déjà récupérés depuis S3 (Garage) par l'activity
+    Temporal.
     """
 
     def parser(self, contenu: bytes, *, ocr_si_scanne: bool = True) -> DocumentParse:
         """Parse les octets d'une pièce en blocs + markdown.
 
-        `ocr_si_scanne` active l'OCR **conditionnel** RapidOCR (TODO(#25)) :
-        l'OCR ne tourne que si la pièce n'a pas de couche texte (PDF scanné),
-        jamais systématiquement. **Jamais EasyOCR, jamais GPU always-on** (§7).
+        `ocr_si_scanne` active l'OCR **conditionnel** RapidOCR (#25) : l'OCR ne
+        tourne que si la pièce n'a pas de couche texte (PDF scanné), jamais
+        systématiquement. **Jamais EasyOCR, jamais GPU always-on** (§7).
         """
         ...
